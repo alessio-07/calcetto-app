@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from './supabase';
-import { Trophy, Home, Shield, LogIn, LogOut } from 'lucide-react';
+import { Trophy, Home, Shield, LogIn, LogOut, UserPlus } from 'lucide-react';
 
 // Importiamo le pagine
 import StatsPage from './pages/StatsPage';
 import HomePage from './pages/HomePage';
 import AdminPage from './pages/AdminPage';
-import MatchCreator from './pages/MatchCreator'; // Importiamo il creatore di partite
+import MatchCreator from './pages/MatchCreator';
 
-// --- COMPONENTE BARRA IN ALTO (HEADER) ---
+// --- HEADER ---
 function Header({ session }) {
   const navigate = useNavigate();
 
@@ -27,18 +27,12 @@ function Header({ session }) {
       
       <div>
         {session ? (
-          <button 
-            onClick={handleLogout} 
-            className="flex items-center gap-1 text-sm bg-green-700 px-3 py-1.5 rounded hover:bg-green-800 transition"
-          >
+          <button onClick={handleLogout} className="flex items-center gap-1 text-sm bg-green-700 px-3 py-1.5 rounded hover:bg-green-800 transition">
             <LogOut size={16} /> Esci
           </button>
         ) : (
-          <Link 
-            to="/login" 
-            className="flex items-center gap-1 text-sm bg-white text-green-700 px-3 py-1.5 rounded font-bold hover:bg-gray-100 transition"
-          >
-            <LogIn size={16} /> Login
+          <Link to="/login" className="flex items-center gap-1 text-sm bg-white text-green-700 px-3 py-1.5 rounded font-bold hover:bg-gray-100 transition">
+            <LogIn size={16} /> Accedi
           </Link>
         )}
       </div>
@@ -46,12 +40,10 @@ function Header({ session }) {
   );
 }
 
-// --- COMPONENTE BARRA IN BASSO (NAVIGAZIONE) ---
+// --- BOTTOM NAV ---
 function BottomNav({ isAdmin }) {
   const location = useLocation();
-  // Nascondi la barra se siamo nella pagina login o creazione/modifica partita
   const hidePaths = ['/new-match', '/login'];
-  // Se l'URL contiene "edit-match", nascondiamo la barra
   const isEditing = location.pathname.includes('/edit-match');
 
   if (hidePaths.includes(location.pathname) || isEditing) return null;
@@ -73,43 +65,96 @@ function BottomNav({ isAdmin }) {
   );
 }
 
-// --- PAGINA DI LOGIN DEDICATA ---
+// --- NUOVA PAGINA LOGIN & REGISTRAZIONE ---
 function LoginPage() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false); // Toggle tra Login e Registrazione
 
-  const handleLogin = async (e) => {
+  const handleAuth = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setMessage('');
-    
-    const { error } = await supabase.auth.signInWithOtp({ 
-      email,
-      options: { emailRedirectTo: window.location.origin }
-    });
 
-    if (error) setMessage('Errore: ' + error.message);
-    else setMessage('✅ Link inviato! Controlla la tua email.');
-    
+    if (isSignUp) {
+      // --- REGISTRAZIONE ---
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+      if (error) {
+        alert("Errore registrazione: " + error.message);
+      } else {
+        alert("Registrazione completata! Ora sei loggato.");
+        navigate('/'); // Vai alla home
+        window.location.reload();
+      }
+    } else {
+      // --- LOGIN ---
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) {
+        alert("Errore accesso: Credenziali sbagliate.");
+      } else {
+        navigate('/'); // Vai alla home
+        window.location.reload();
+      }
+    }
     setLoading(false);
   };
 
   return (
     <div className="p-6 flex flex-col items-center justify-center min-h-[80vh]">
       <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-sm border border-gray-100">
-        <h1 className="text-2xl font-bold mb-2 text-center text-gray-800">Benvenuto</h1>
-        <p className="text-gray-500 text-center mb-6 text-sm">Inserisci la tua email per ricevere il link.</p>
-        <form onSubmit={handleLogin} className="space-y-4">
+        <h1 className="text-2xl font-bold mb-2 text-center text-gray-800">
+          {isSignUp ? 'Crea Account' : 'Bentornato'}
+        </h1>
+        <p className="text-gray-500 text-center mb-6 text-sm">
+          {isSignUp ? 'Inserisci i dati per registrarti' : 'Accedi per gestire le partite'}
+        </p>
+        
+        <form onSubmit={handleAuth} className="space-y-4">
           <input 
-            type="email" placeholder="nome@esempio.com" required value={email} onChange={e => setEmail(e.target.value)}
+            type="email" 
+            placeholder="Email" 
+            required
+            value={email} 
+            onChange={e => setEmail(e.target.value)}
             className="border-2 border-gray-200 p-3 rounded-lg w-full focus:border-green-500 focus:outline-none transition"
           />
-          <button type="submit" disabled={loading} className="bg-green-600 hover:bg-green-700 text-white font-bold p-3 rounded-lg w-full transition flex justify-center">
-            {loading ? 'Invio...' : 'Mandami il Link Magico'}
+          <input 
+            type="password" 
+            placeholder="Password" 
+            required
+            value={password} 
+            onChange={e => setPassword(e.target.value)}
+            className="border-2 border-gray-200 p-3 rounded-lg w-full focus:border-green-500 focus:outline-none transition"
+          />
+          
+          <button 
+            type="submit" 
+            disabled={loading} 
+            className="bg-green-600 hover:bg-green-700 text-white font-bold p-3 rounded-lg w-full transition flex justify-center"
+          >
+            {loading ? 'Caricamento...' : (isSignUp ? 'Registrati' : 'Accedi')}
           </button>
         </form>
-        {message && <div className="mt-4 p-3 rounded text-sm text-center bg-green-100 text-green-800">{message}</div>}
+        
+        <div className="mt-6 text-center border-t pt-4">
+          <p className="text-sm text-gray-500 mb-2">
+            {isSignUp ? 'Hai già un account?' : 'Non hai un account?'}
+          </p>
+          <button 
+            onClick={() => setIsSignUp(!isSignUp)}
+            className="text-green-600 font-bold hover:underline flex items-center justify-center gap-1 mx-auto"
+          >
+             {isSignUp ? <LogIn size={16}/> : <UserPlus size={16}/>}
+             {isSignUp ? 'Vai al Login' : 'Registrati ora'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -152,15 +197,9 @@ export default function App() {
             <Route path="/stats" element={<StatsPage />} />
             <Route path="/login" element={<LoginPage />} />
             
-            {/* --- LE ROTTE PROTETTE --- */}
             <Route path="/admin" element={isAdmin ? <AdminPage isAdmin={isAdmin} /> : <AccessDenied />} />
-            
-            {/* Questa è la rotta per CREARE una nuova partita */}
             <Route path="/new-match" element={isAdmin ? <MatchCreator /> : <AccessDenied />} />
-            
-            {/* Questa è la rotta NUOVA per MODIFICARE una partita (nota il /:id) */}
             <Route path="/edit-match/:id" element={isAdmin ? <MatchCreator /> : <AccessDenied />} />
-            
           </Routes>
         </div>
 
