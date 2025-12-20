@@ -26,7 +26,7 @@ export default function HomePage() {
           players ( name )
         )
       `)
-      .order('date', { ascending: false }); // Ordina per data (le più recenti/future in alto)
+      .order('date', { ascending: false });
 
     if (error) console.error('Errore:', error);
     else setMatches(data || []);
@@ -48,7 +48,6 @@ export default function HomePage() {
       
       <div className="space-y-4">
         {matches.map(match => {
-          // Controlliamo se è una Preview
           const isPreview = match.status === 'scheduled';
 
           return (
@@ -124,9 +123,11 @@ export default function HomePage() {
                     <th className="text-left py-2">Formazioni</th>
                     {selectedMatch.status !== 'scheduled' && (
                       <>
-                        <th className="text-center py-2">⚽</th>
-                        <th className="text-center py-2">👟</th>
-                        <th className="text-center py-2">🧤</th>
+                        <th className="text-center py-2" title="Gol Fatti">⚽</th>
+                        <th className="text-center py-2" title="Assist">👟</th>
+                        <th className="text-center py-2" title="Turni in Porta">🧤</th>
+                        {/* ECCOLA QUI SOTTO: L'ICONA MANCANTE */}
+                        <th className="text-center py-2" title="Gol Subiti">🥅</th>
                       </>
                     )}
                   </tr>
@@ -144,12 +145,21 @@ export default function HomePage() {
                           <td className="text-center font-bold">{stat.goals > 0 ? stat.goals : '-'}</td>
                           <td className="text-center text-gray-500">{stat.assists > 0 ? stat.assists : '-'}</td>
                           <td className="text-center text-gray-500">{stat.gk_turns > 0 ? stat.gk_turns : '-'}</td>
+                          {/* ECCO I DATI MANCANTI */}
+                          <td className="text-center font-bold text-red-400">
+                            {stat.gk_turns > 0 ? stat.gk_conceded : '-'}
+                          </td>
                         </>
                       )}
                     </tr>
                   ))}
                 </tbody>
               </table>
+              
+              <div className="mt-4 text-[10px] text-gray-400 text-center">
+                 Legenda: ⚽ Gol | 👟 Assist | 🧤 Turni Porta | 🥅 Gol Subiti
+              </div>
+
               {selectedMatch.status === 'scheduled' && (
                 <p className="text-center text-sm text-gray-500 mt-4 italic">
                   Partita non ancora giocata. Statistiche non disponibili.
