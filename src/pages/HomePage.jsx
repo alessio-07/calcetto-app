@@ -80,10 +80,14 @@ export default function HomePage() {
   const handleShare = async () => {
     if (!printRef.current) return;
     try {
+      // Piccolo ritardo per assicurare il rendering dei font
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const canvas = await html2canvas(printRef.current, {
         backgroundColor: '#ffffff',
-        scale: 3, // Aumentata scala per qualità migliore
-        useCORS: true, // Aiuta con le icone esterne
+        scale: 3, 
+        useCORS: true,
+        logging: false,
       });
       const dataUrl = canvas.toDataURL('image/png');
       const blob = await (await fetch(dataUrl)).blob();
@@ -198,15 +202,14 @@ export default function HomePage() {
 
               <table className="w-full text-sm border-collapse">
                 <thead>
-                  {/* Aumentato padding (py-4) per staccare le icone */}
                   <tr className="text-gray-500 text-xs border-b-2 border-gray-100">
                     <th className="text-left py-4 font-semibold">Formazioni</th>
                     {selectedMatch.status !== 'scheduled' && (
                       <>
-                        <th className="text-center py-4" title="Gol Fatti">⚽</th>
-                        <th className="text-center py-4" title="Assist">👟</th>
-                        <th className="text-center py-4" title="Turni in Porta">🧤</th>
-                        <th className="text-center py-4" title="Gol Subiti">🥅</th>
+                        <th className="text-center py-4 w-12" title="Gol Fatti">⚽</th>
+                        <th className="text-center py-4 w-12" title="Assist">👟</th>
+                        <th className="text-center py-4 w-12" title="Turni in Porta">🧤</th>
+                        <th className="text-center py-4 w-12" title="Gol Subiti">🥅</th>
                       </>
                     )}
                   </tr>
@@ -214,21 +217,36 @@ export default function HomePage() {
                 <tbody className="divide-y divide-gray-100">
                   {selectedMatch.match_stats.map(stat => (
                     <tr key={stat.id} className={stat.team === 'A' ? 'bg-blue-50/30' : 'bg-red-50/30'}>
-                      {/* FIX: align-middle sulla cella, flex nel div interno */}
-                      <td className="py-3 pl-2 font-medium align-middle">
-                        <div className="flex items-center gap-2">
-                          <span className={`w-1.5 h-5 rounded-full ${stat.team === 'A' ? 'bg-blue-500' : 'bg-red-500'}`}></span>
+                      {/* CELLE CON FLEXBOX PER CENTRATURA PERFETTA */}
+                      <td className="py-2 pl-2 font-medium h-12">
+                        <div className="flex items-center h-full gap-2">
+                          <span className={`w-1.5 h-5 rounded-full shrink-0 ${stat.team === 'A' ? 'bg-blue-500' : 'bg-red-500'}`}></span>
                           <span className="truncate">{stat.players?.name}</span>
                           {stat.is_mvp && <Star size={15} className="text-yellow-500 fill-yellow-500 shrink-0" />}
                         </div>
                       </td>
                       {selectedMatch.status !== 'scheduled' && (
                         <>
-                          {/* FIX: align-middle su tutte le celle numeriche */}
-                          <td className="text-center font-bold align-middle text-base">{stat.goals > 0 ? stat.goals : '-'}</td>
-                          <td className="text-center text-gray-500 align-middle">{stat.assists > 0 ? stat.assists : '-'}</td>
-                          <td className="text-center text-gray-500 align-middle">{stat.gk_turns > 0 ? stat.gk_turns : '-'}</td>
-                          <td className="text-center font-bold text-red-400 align-middle">{stat.gk_turns > 0 ? stat.gk_conceded : '-'}</td>
+                          <td className="h-12 text-base font-bold text-gray-800">
+                            <div className="flex items-center justify-center h-full">
+                              {stat.goals > 0 ? stat.goals : '-'}
+                            </div>
+                          </td>
+                          <td className="h-12 text-gray-500">
+                             <div className="flex items-center justify-center h-full">
+                               {stat.assists > 0 ? stat.assists : '-'}
+                             </div>
+                          </td>
+                          <td className="h-12 text-gray-500">
+                             <div className="flex items-center justify-center h-full">
+                               {stat.gk_turns > 0 ? stat.gk_turns : '-'}
+                             </div>
+                          </td>
+                          <td className="h-12 font-bold text-red-400">
+                             <div className="flex items-center justify-center h-full">
+                               {stat.gk_turns > 0 ? stat.gk_conceded : '-'}
+                             </div>
+                          </td>
                         </>
                       )}
                     </tr>
@@ -236,14 +254,17 @@ export default function HomePage() {
                 </tbody>
               </table>
               
-              {/* FIX: align-items-center per la legenda */}
-              <div className="mt-8 pt-4 border-t text-[10px] text-gray-400 text-center flex flex-wrap justify-center items-center gap-3 uppercase tracking-wider font-medium">
+              {/* LEGENDA CORRETTA */}
+              <div className="mt-8 pt-4 border-t text-[10px] text-gray-400 text-center flex flex-wrap justify-center items-center gap-4 uppercase tracking-wider font-medium">
                  <span>Legenda:</span>
                  <span>⚽ Gol</span> 
                  <span>👟 Assist</span> 
                  <span>🧤 Turni Porta</span> 
                  <span>🥅 Gol Subiti</span>
-                 <span className="flex items-center gap-1"><Star size={11} className="fill-yellow-500 text-yellow-500"/> MVP</span>
+                 {/* STELLA CENTRATA CON FLEX INLINE */}
+                 <span className="inline-flex items-center gap-1">
+                   <Star size={12} className="fill-yellow-500 text-yellow-500 mb-0.5"/> MVP
+                 </span>
               </div>
 
               {selectedMatch.status === 'scheduled' && (
