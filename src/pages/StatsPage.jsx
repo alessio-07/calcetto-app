@@ -34,7 +34,6 @@ export default function StatsPage() {
       case 'win_perc': return (player.wins / mp) * 100;
       case 'draw_perc': return (player.draws / mp) * 100;
       case 'loss_perc': return (player.losses / mp) * 100;
-      // NUOVO: Rateo MVP
       case 'mvp_perc': return (player.total_mvps / mp) * 100;
       
       default: return player[key] || 0;
@@ -55,7 +54,7 @@ export default function StatsPage() {
     if (key === 'clean_sheets') secondaryKey = 'mini_clean_sheets';
     if (key === 'gk_conceded') secondaryKey = 'conceded_ratio';
     if (key === 'wins') secondaryKey = 'win_perc';
-    if (key === 'total_mvps') secondaryKey = 'mvp_perc'; // Spareggio MVP
+    if (key === 'total_mvps') secondaryKey = 'mvp_perc';
 
     if (valA !== valB) {
       if (valA < valB) return dir === 'asc' ? -1 : 1;
@@ -122,6 +121,13 @@ export default function StatsPage() {
           ))}
         </tbody>
       </table>
+      {/* LEGENDA ATTACCO */}
+      <div className="mt-2 text-[10px] text-gray-500 bg-blue-50 p-2 rounded">
+        {subTab === 'goals' 
+          ? <><strong>goal:</strong> goal totali segnati. <strong>rateo:</strong> goal segnati a partita.</>
+          : <><strong>assist:</strong> assist totali effettuati. <strong>rateo:</strong> assist effettuati a partita.</>
+        }
+      </div>
     </>
   );
 
@@ -172,10 +178,17 @@ export default function StatsPage() {
           ))}
         </tbody>
       </table>
+      {/* LEGENDA DIFESA */}
+      <div className="mt-2 text-[10px] text-gray-500 bg-green-50 p-2 rounded">
+        {subTab === 'clean' 
+          ? <><strong>cs:</strong> numero di partite senza subire neanche un goal. <strong>mini cs:</strong> numero di turni in porta senza subire goal.</>
+          : <><strong>subiti:</strong> numero totale di goal subiti. <strong>rateo:</strong> numero di goal subiti per turno in porta.</>
+        }
+      </div>
     </>
   );
 
-  // --- TABELLA GENERALI (CON MVP) ---
+  // --- TABELLA GENERALI ---
   const renderGeneral = () => (
     <>
       <div className="flex gap-2 mb-4 bg-gray-100 p-1 rounded-lg overflow-x-auto">
@@ -218,6 +231,8 @@ export default function StatsPage() {
                 <Th label="D" sortKey="draws" align="center"/>
                 <Th label="L" sortKey="losses" align="center"/>
                 <Th label="%W" sortKey="win_perc" align="center"/>
+                <Th label="%D" sortKey="draw_perc" align="center"/>
+                <Th label="%L" sortKey="loss_perc" align="center"/>
               </tr>
             </thead>
             <tbody className="divide-y text-gray-700">
@@ -228,6 +243,8 @@ export default function StatsPage() {
                   <td className="p-2 text-center text-gray-400">{p.draws}</td>
                   <td className="p-2 text-center text-red-400">{p.losses}</td>
                   <td className="p-2 text-center font-bold bg-green-50">{getValue(p, 'win_perc').toFixed(0)}%</td>
+                  <td className="p-2 text-center text-gray-500">{getValue(p, 'draw_perc').toFixed(0)}%</td>
+                  <td className="p-2 text-center text-red-300">{getValue(p, 'loss_perc').toFixed(0)}%</td>
                 </tr>
               ))}
             </tbody>
@@ -263,10 +280,11 @@ export default function StatsPage() {
         </table>
       )}
 
+      {/* LEGENDA GENERALI */}
       <div className="mt-2 text-[10px] text-gray-500 bg-purple-50 p-2 rounded">
-         {subTab === 'mvp' && "% MVP = Numero di volte MVP diviso per le presenze totali."}
-         {subTab === 'results' && "W = Vinte, D = Pareggiate, L = Perse."}
-         {subTab === 'presence' && "% Presenze = Partite giocate / Totale partite gruppo."}
+         {subTab === 'presence' && <><strong>presenze:</strong> numero totale di presenze. <strong>%presenze:</strong> presenze/partite totali giocate.</>}
+         {subTab === 'results' && <><strong>W</strong> = Vinte, <strong>D</strong> = Pareggiate, <strong>L</strong> = Perse.<br/><strong>%W</strong> = Vinte/Presenze, <strong>%D</strong> = Pareggiate/Presenze, <strong>%L</strong> = Perse/Presenze.</>}
+         {subTab === 'mvp' && <><strong>mvp:</strong> numero totale di MVP. <strong>%mvp:</strong> numero di mvp/presenze.</>}
       </div>
     </>
   );
