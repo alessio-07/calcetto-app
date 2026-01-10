@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabase';
-import { X, Star, Clock } from 'lucide-react';
+import { X, Star, Clock, Share2 } from 'lucide-react';
+import html2canvas from 'html2canvas';
 
 // --- COMPONENTE COUNTDOWN ---
 function MatchCountdown({ targetDate }) {
@@ -41,6 +42,9 @@ function MatchCountdown({ targetDate }) {
 export default function HomePage() {
   const [matches, setMatches] = useState([]);
   const [selectedMatch, setSelectedMatch] = useState(null);
+  
+  // Ref per "catturare" l'immagine
+  const printRef = useRef(null);
 
   useEffect(() => {
     fetchMatches();
@@ -73,6 +77,42 @@ export default function HomePage() {
       .filter(s => s.team === teamLetter)
       .map(s => s.players?.name || 'Sconosciuto')
       .join(', ');
+  };
+
+  // --- FUNZIONE CONDIVISIONE ---
+  const handleShare = async () => {
+    if (!printRef.current) return;
+
+    try {
+      // 1. Genera l'immagine dal div (con sfondo bianco forzato)
+      const canvas = await html2canvas(printRef.current, {
+        backgroundColor: '#ffffff',
+        scale: 2, // Migliora la qualità
+      });
+      const dataUrl = canvas.toDataURL('image/png');
+
+      // 2. Converti in file per la condivisione mobile
+      const blob = await (await fetch(dataUrl)).blob();
+      const file = new File([blob], 'match-stats.png', { type: 'image/png' });
+
+      // 3. Prova a usare la condivisione nativa (Android/iOS)
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Risultato Partita',
+          text: 'Guarda le statistiche della nostra partita!',
+        });
+      } else {
+        // 4. Fallback per PC: Scarica l'immagine
+        const link = document.createElement('a');
+        link.download = `partita-${selectedMatch.date.split('T')[0]}.png`;
+        link.href = dataUrl;
+        link.click();
+      }
+    } catch (error) {
+      console.error("Errore nella condivisione:", error);
+      alert("Impossibile condividere l'immagine su questo dispositivo.");
+    }
   };
 
   return (
@@ -133,22 +173,35 @@ export default function HomePage() {
         })}
       </div>
 
+      {/* MODALE DETTAGLI */}
       {selectedMatch && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSelectedMatch(null)}>
-          <div className="bg-white w-full max-w-lg max-h-[80vh] overflow-y-auto rounded-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-white w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+            
+            {/* Header del Modale (Non viene fotografato) */}
             <div className="sticky top-0 bg-gray-100 p-4 flex justify-between items-center border-b z-10">
               <h2 className="font-bold text-lg">
-                {selectedMatch.status === 'scheduled' ? 'Dettagli Anteprima' : 'Risultato Partita'}
+                {selectedMatch.status === 'scheduled' ? 'Dettagli Anteprima' : 'Risultato'}
               </h2>
-              <button onClick={() => setSelectedMatch(null)} className="p-1 bg-gray-200 rounded-full hover:bg-gray-300">
-                <X size={20} />
-              </button>
+              <div className="flex gap-2">
+                <button onClick={handleShare} className="p-2 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition">
+                  <Share2 size={20} />
+                </button>
+                <button onClick={() => setSelectedMatch(null)} className="p-2 bg-gray-200 rounded-full hover:bg-gray-300">
+                  <X size={20} />
+                </button>
+              </div>
             </div>
 
-            <div className="p-4">
-              <div className="text-center text-3xl font-bold mb-6 text-gray-800">
+            {/* CONTENUTO DA FOTOGRAFARE (ref={printRef}) */}
+            <div ref={printRef} className="p-6 bg-white">
+              <div className="text-center text-gray-400 text-xs uppercase font-bold mb-2">
+                 {new Date(selectedMatch.date).toLocaleDateString('it-IT', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              </div>
+
+              <div className="text-center text-4xl font-bold mb-6 text-gray-800">
                 {selectedMatch.status === 'scheduled' 
-                  ? <span className="text-yellow-600 text-xl"><MatchCountdown targetDate={selectedMatch.date} /></span> 
+                  ? <span className="text-yellow-600 text-2xl"><MatchCountdown targetDate={selectedMatch.date} /></span> 
                   : `${selectedMatch.team_a_score} - ${selectedMatch.team_b_score}`
                 }
               </div>
@@ -190,13 +243,12 @@ export default function HomePage() {
                 </tbody>
               </table>
               
-              <div className="mt-4 text-[10px] text-gray-400 text-center flex flex-wrap justify-center gap-2">
+              <div className="mt-6 pt-4 border-t text-[10px] text-gray-400 text-center flex flex-wrap justify-center gap-2">
                  <span>Legenda:</span>
                  <span>⚽ Gol</span> | 
                  <span>👟 Assist</span> | 
                  <span>🧤 Turni Porta</span> | 
                  <span>🥅 Gol Subiti</span> |
-                 {/* STELLA ORA GIALLA */}
                  <span className="flex items-center gap-0.5"><Star size={10} className="fill-yellow-500 text-yellow-500"/> MVP</span>
               </div>
 
