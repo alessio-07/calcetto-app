@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabase';
-import { ArrowUpDown, ArrowUp, ArrowDown, Info } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, Star } from 'lucide-react';
 
 export default function StatsPage() {
   const [stats, setStats] = useState([]);
@@ -9,7 +9,6 @@ export default function StatsPage() {
   // Configurazioni Tab
   const [mainTab, setMainTab] = useState('attack'); 
   const [subTab, setSubTab] = useState('goals'); 
-  // Default sorting
   const [sortConfig, setSortConfig] = useState({ key: 'total_goals', direction: 'desc' });
 
   useEffect(() => {
@@ -21,59 +20,51 @@ export default function StatsPage() {
     getStats();
   }, []);
 
-  // --- CALCOLATORE VALORI (Helper) ---
+  // --- CALCOLATORE VALORI ---
   function getValue(player, key) {
     const mp = player.matches_played || 1; 
     const gk = player.gk_turns || 1;
 
     switch (key) {
-      // Attacco
       case 'goal_ratio': return player.total_goals / mp;
       case 'assist_ratio': return player.total_assists / mp;
-      
-      // Difesa
       case 'mini_clean_sheets': return player.gk_turns - player.gk_conceded;
       case 'conceded_ratio': return player.gk_conceded / gk;
-      
-      // Generali
       case 'presence_perc': return (player.matches_played / (player.total_matches_global || 1)) * 100;
       case 'win_perc': return (player.wins / mp) * 100;
       case 'draw_perc': return (player.draws / mp) * 100;
       case 'loss_perc': return (player.losses / mp) * 100;
+      // NUOVO: Rateo MVP
+      case 'mvp_perc': return (player.total_mvps / mp) * 100;
       
       default: return player[key] || 0;
     }
   }
 
-  // --- LOGICA DI ORDINAMENTO CON SPAREGGIO (TIE-BREAKER) ---
+  // --- ORDINAMENTO ---
   const sortedStats = [...stats].sort((a, b) => {
     const key = sortConfig.key;
     const dir = sortConfig.direction;
 
-    // 1. Prendi i valori della colonna principale
     let valA = getValue(a, key);
     let valB = getValue(b, key);
 
-    // 2. Definisci la colonna di SPAREGGIO (Tie-breaker)
     let secondaryKey = null;
     if (key === 'total_goals') secondaryKey = 'goal_ratio';
     if (key === 'total_assists') secondaryKey = 'assist_ratio';
     if (key === 'clean_sheets') secondaryKey = 'mini_clean_sheets';
     if (key === 'gk_conceded') secondaryKey = 'conceded_ratio';
     if (key === 'wins') secondaryKey = 'win_perc';
+    if (key === 'total_mvps') secondaryKey = 'mvp_perc'; // Spareggio MVP
 
-    // 3. Confronto Primario
     if (valA !== valB) {
       if (valA < valB) return dir === 'asc' ? -1 : 1;
       if (valA > valB) return dir === 'asc' ? 1 : -1;
     }
 
-    // 4. Confronto Secondario (se i valori primari sono uguali)
     if (secondaryKey) {
       let secA = getValue(a, secondaryKey);
       let secB = getValue(b, secondaryKey);
-      
-      // Lo spareggio segue la stessa direzione dell'ordinamento principale
       if (secA < secB) return dir === 'asc' ? -1 : 1;
       if (secA > secB) return dir === 'asc' ? 1 : -1;
     }
@@ -81,15 +72,12 @@ export default function StatsPage() {
     return 0;
   });
 
-  // --- GESTIONE CLICK ORDINAMENTO ---
   const handleSort = (key) => {
     let direction = 'desc';
-    // Se clicco la stessa colonna, inverto l'ordine
     if (sortConfig.key === key && sortConfig.direction === 'desc') direction = 'asc';
     setSortConfig({ key, direction });
   };
 
-  // --- COMPONENTI UI ---
   const SortIcon = ({ columnKey }) => {
     if (sortConfig.key !== columnKey) return <ArrowUpDown size={12} className="text-gray-300 ml-1 inline" />;
     return sortConfig.direction === 'asc' 
@@ -134,9 +122,6 @@ export default function StatsPage() {
           ))}
         </tbody>
       </table>
-      <div className="mt-2 text-[10px] text-gray-500 bg-blue-50 p-2 rounded">
-        Info: A parità di {subTab === 'goals' ? 'Goal' : 'Assist'}, vince chi ha il <strong>Rateo migliore</strong>.
-      </div>
     </>
   );
 
@@ -187,25 +172,22 @@ export default function StatsPage() {
           ))}
         </tbody>
       </table>
-      <div className="mt-2 text-[10px] text-gray-500 bg-green-50 p-2 rounded">
-        Info: A parità di {subTab === 'clean' ? 'Clean Sheet' : 'Goal Subiti'}, vince chi ha {subTab === 'clean' ? 'più Mini Clean Sheet' : 'il Rateo migliore'}.
-      </div>
     </>
   );
 
-  // --- TABELLA GENERALI ---
+  // --- TABELLA GENERALI (CON MVP) ---
   const renderGeneral = () => (
     <>
-      <div className="flex gap-2 mb-4 bg-gray-100 p-1 rounded-lg">
-        {['presence', 'results'].map(t => (
-          <button key={t} onClick={() => {setSubTab(t); handleSort(t === 'presence' ? 'matches_played' : 'wins')}} 
-            className={`flex-1 py-2 text-xs font-bold rounded uppercase ${subTab === t ? 'bg-white shadow text-purple-600' : 'text-gray-400'}`}>
-            {t === 'presence' ? 'Presenze' : 'Risultati'}
+      <div className="flex gap-2 mb-4 bg-gray-100 p-1 rounded-lg overflow-x-auto">
+        {['presence', 'results', 'mvp'].map(t => (
+          <button key={t} onClick={() => {setSubTab(t); handleSort(t === 'presence' ? 'matches_played' : (t === 'results' ? 'wins' : 'total_mvps'))}} 
+            className={`flex-1 py-2 px-1 text-xs font-bold rounded uppercase min-w-[70px] ${subTab === t ? 'bg-white shadow text-purple-600' : 'text-gray-400'}`}>
+            {t === 'presence' ? 'Presenze' : (t === 'results' ? 'Risultati' : 'MVP')}
           </button>
         ))}
       </div>
       
-      {subTab === 'presence' ? (
+      {subTab === 'presence' && (
         <table className="w-full bg-white text-sm rounded shadow overflow-hidden">
           <thead className="bg-gray-50 border-b text-xs uppercase text-gray-500">
             <tr>
@@ -224,7 +206,9 @@ export default function StatsPage() {
             ))}
           </tbody>
         </table>
-      ) : (
+      )}
+      
+      {subTab === 'results' && (
         <div className="overflow-x-auto rounded shadow">
           <table className="w-full bg-white text-xs min-w-[350px]">
             <thead className="bg-gray-50 border-b uppercase text-gray-500">
@@ -234,8 +218,6 @@ export default function StatsPage() {
                 <Th label="D" sortKey="draws" align="center"/>
                 <Th label="L" sortKey="losses" align="center"/>
                 <Th label="%W" sortKey="win_perc" align="center"/>
-                <Th label="%D" sortKey="draw_perc" align="center"/>
-                <Th label="%L" sortKey="loss_perc" align="center"/>
               </tr>
             </thead>
             <tbody className="divide-y text-gray-700">
@@ -246,16 +228,45 @@ export default function StatsPage() {
                   <td className="p-2 text-center text-gray-400">{p.draws}</td>
                   <td className="p-2 text-center text-red-400">{p.losses}</td>
                   <td className="p-2 text-center font-bold bg-green-50">{getValue(p, 'win_perc').toFixed(0)}%</td>
-                  <td className="p-2 text-center text-gray-500">{getValue(p, 'draw_perc').toFixed(0)}%</td>
-                  <td className="p-2 text-center text-red-300">{getValue(p, 'loss_perc').toFixed(0)}%</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      {subTab === 'mvp' && (
+        <table className="w-full bg-white text-sm rounded shadow overflow-hidden">
+          <thead className="bg-gray-50 border-b text-xs uppercase text-gray-500">
+            <tr>
+              <Th label="Giocatore" sortKey="name" align="left" />
+              <Th label="Totale MVP" sortKey="total_mvps" />
+              <Th label="% MVP" sortKey="mvp_perc" />
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {sortedStats.filter(p => p.total_mvps > 0).map((p, i) => (
+              <tr key={p.id}>
+                <td className="p-3 font-medium flex items-center gap-2">
+                  <span className="text-gray-300 text-xs w-3">{i+1}</span>
+                  {p.name}
+                  <Star size={12} className="text-yellow-500 fill-yellow-500"/>
+                </td>
+                <td className="p-3 text-right font-bold text-yellow-600 text-lg">{p.total_mvps}</td>
+                <td className="p-3 text-right font-mono text-gray-600">{getValue(p, 'mvp_perc').toFixed(1)}%</td>
+              </tr>
+            ))}
+            {sortedStats.filter(p => p.total_mvps > 0).length === 0 && (
+               <tr><td colSpan="3" className="p-4 text-center text-gray-400 italic">Nessun MVP assegnato finora.</td></tr>
+            )}
+          </tbody>
+        </table>
+      )}
+
       <div className="mt-2 text-[10px] text-gray-500 bg-purple-50 p-2 rounded">
-         {subTab === 'results' && "Info: A parità di Vittorie (W), vince chi ha la %W migliore."}
+         {subTab === 'mvp' && "% MVP = Numero di volte MVP diviso per le presenze totali."}
+         {subTab === 'results' && "W = Vinte, D = Pareggiate, L = Perse."}
+         {subTab === 'presence' && "% Presenze = Partite giocate / Totale partite gruppo."}
       </div>
     </>
   );
@@ -269,7 +280,6 @@ export default function StatsPage() {
       <div className="flex border-b border-gray-200 mb-6">
         {['attack', 'defense', 'general'].map(t => (
           <button key={t} onClick={() => {setMainTab(t); setSubTab(t==='attack'?'goals':t==='defense'?'clean':'presence'); 
-            // Reset sort automatico quando cambi tab principale
             if(t==='attack') setSortConfig({key:'total_goals', direction:'desc'});
             if(t==='defense') setSortConfig({key:'clean_sheets', direction:'desc'});
             if(t==='general') setSortConfig({key:'matches_played', direction:'desc'});
