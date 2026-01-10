@@ -3,7 +3,6 @@ import { supabase } from '../supabase';
 import { X, Star, Clock } from 'lucide-react';
 
 // --- COMPONENTE COUNTDOWN ---
-// Calcola quanto manca alla partita
 function MatchCountdown({ targetDate }) {
   const [timeLeft, setTimeLeft] = useState('');
 
@@ -14,7 +13,7 @@ function MatchCountdown({ targetDate }) {
       const diff = matchTime - now;
 
       if (diff <= 0) {
-        setTimeLeft('VS'); // Se è scaduto, mostra VS
+        setTimeLeft('VS'); 
         return;
       }
 
@@ -22,18 +21,16 @@ function MatchCountdown({ targetDate }) {
       const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
 
-      // LOGICA RICHIESTA: Se > 1 giorno mostra solo giorni, altrimenti ore:minuti
       if (days >= 1) {
         setTimeLeft(`-${days}gg`);
       } else {
-        // Aggiunge lo zero davanti se minuti < 10 (es. 15:05)
         const mString = minutes < 10 ? `0${minutes}` : minutes;
         setTimeLeft(`${hours}h ${mString}m`);
       }
     };
 
     calculateTime();
-    const timer = setInterval(calculateTime, 60000); // Aggiorna ogni minuto
+    const timer = setInterval(calculateTime, 60000); 
     return () => clearInterval(timer);
   }, [targetDate]);
 
@@ -96,7 +93,6 @@ export default function HomePage() {
             >
               <div className="flex justify-between items-center mb-3">
                  <div className="text-gray-400 text-xs font-bold uppercase tracking-wider flex items-center gap-1">
-                    {/* Mostra anche l'ora se è una preview */}
                     {new Date(match.date).toLocaleDateString('it-IT')}
                     {isPreview && <span> - {new Date(match.date).toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}</span>}
                  </div>
@@ -108,14 +104,12 @@ export default function HomePage() {
               </div>
               
               <div className="flex justify-between items-center">
-                {/* Squadra A */}
                 <div className="flex-1">
                   <div className="font-bold text-gray-800 text-lg leading-tight">
                     {getTeamNames(match.match_stats, 'A') || 'Squadra A'}
                   </div>
                 </div>
 
-                {/* Punteggio o Countdown */}
                 <div className={`mx-4 px-4 py-2 rounded-lg font-mono font-bold text-xl whitespace-nowrap border min-w-[100px] text-center ${isPreview ? 'bg-yellow-100 border-yellow-200' : 'bg-gray-100 border-gray-200'}`}>
                   {isPreview ? (
                     <MatchCountdown targetDate={match.date} />
@@ -124,7 +118,6 @@ export default function HomePage() {
                   )}
                 </div>
 
-                {/* Squadra B */}
                 <div className="flex-1 text-right">
                   <div className="font-bold text-gray-800 text-lg leading-tight">
                     {getTeamNames(match.match_stats, 'B') || 'Squadra B'}
@@ -140,7 +133,6 @@ export default function HomePage() {
         })}
       </div>
 
-      {/* MODALE DETTAGLI */}
       {selectedMatch && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSelectedMatch(null)}>
           <div className="bg-white w-full max-w-lg max-h-[80vh] overflow-y-auto rounded-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -198,8 +190,14 @@ export default function HomePage() {
                 </tbody>
               </table>
               
-              <div className="mt-4 text-[10px] text-gray-400 text-center">
-                 Legenda: ⚽ Gol | 👟 Assist | 🧤 Turni Porta | 🥅 Gol Subiti
+              <div className="mt-4 text-[10px] text-gray-400 text-center flex flex-wrap justify-center gap-2">
+                 <span>Legenda:</span>
+                 <span>⚽ Gol</span> | 
+                 <span>👟 Assist</span> | 
+                 <span>🧤 Turni Porta</span> | 
+                 <span>🥅 Gol Subiti</span> |
+                 {/* STELLA ORA GIALLA */}
+                 <span className="flex items-center gap-0.5"><Star size={10} className="fill-yellow-500 text-yellow-500"/> MVP</span>
               </div>
 
               {selectedMatch.status === 'scheduled' && (
