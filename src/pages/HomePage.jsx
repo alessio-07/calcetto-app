@@ -1,7 +1,46 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabase';
-import { X, Star } from 'lucide-react';
+import { X, Star, Clock } from 'lucide-react';
 
+// --- COMPONENTE COUNTDOWN ---
+// Calcola quanto manca alla partita
+function MatchCountdown({ targetDate }) {
+  const [timeLeft, setTimeLeft] = useState('');
+
+  useEffect(() => {
+    const calculateTime = () => {
+      const now = new Date();
+      const matchTime = new Date(targetDate);
+      const diff = matchTime - now;
+
+      if (diff <= 0) {
+        setTimeLeft('VS'); // Se è scaduto, mostra VS
+        return;
+      }
+
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+      // LOGICA RICHIESTA: Se > 1 giorno mostra solo giorni, altrimenti ore:minuti
+      if (days >= 1) {
+        setTimeLeft(`-${days}gg`);
+      } else {
+        // Aggiunge lo zero davanti se minuti < 10 (es. 15:05)
+        const mString = minutes < 10 ? `0${minutes}` : minutes;
+        setTimeLeft(`${hours}h ${mString}m`);
+      }
+    };
+
+    calculateTime();
+    const timer = setInterval(calculateTime, 60000); // Aggiorna ogni minuto
+    return () => clearInterval(timer);
+  }, [targetDate]);
+
+  return <span className="text-yellow-800 tracking-tight">{timeLeft}</span>;
+}
+
+// --- PAGINA HOME PRINCIPALE ---
 export default function HomePage() {
   const [matches, setMatches] = useState([]);
   const [selectedMatch, setSelectedMatch] = useState(null);
@@ -11,7 +50,6 @@ export default function HomePage() {
   }, []);
 
   async function fetchMatches() {
-    // Scarichiamo anche il campo 'status'
     const { data, error } = await supabase
       .from('matches')
       .select(`
@@ -57,12 +95,14 @@ export default function HomePage() {
               className={`p-5 rounded-xl shadow-sm border cursor-pointer hover:shadow-md transition active:scale-95 ${isPreview ? 'bg-yellow-50 border-yellow-200' : 'bg-white border-gray-100'}`}
             >
               <div className="flex justify-between items-center mb-3">
-                 <div className="text-gray-400 text-xs font-bold uppercase tracking-wider">
+                 <div className="text-gray-400 text-xs font-bold uppercase tracking-wider flex items-center gap-1">
+                    {/* Mostra anche l'ora se è una preview */}
                     {new Date(match.date).toLocaleDateString('it-IT')}
+                    {isPreview && <span> - {new Date(match.date).toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}</span>}
                  </div>
                  {isPreview && (
-                   <span className="bg-yellow-200 text-yellow-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                     PROGRAMMATA
+                   <span className="bg-yellow-200 text-yellow-800 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                     <Clock size={10}/> PROGRAMMATA
                    </span>
                  )}
               </div>
@@ -75,9 +115,13 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                {/* Punteggio o VS */}
-                <div className={`mx-4 px-4 py-2 rounded-lg font-mono font-bold text-xl whitespace-nowrap border ${isPreview ? 'bg-yellow-100 text-yellow-800 border-yellow-200' : 'bg-gray-100 border-gray-200'}`}>
-                  {isPreview ? 'VS' : `${match.team_a_score} - ${match.team_b_score}`}
+                {/* Punteggio o Countdown */}
+                <div className={`mx-4 px-4 py-2 rounded-lg font-mono font-bold text-xl whitespace-nowrap border min-w-[100px] text-center ${isPreview ? 'bg-yellow-100 border-yellow-200' : 'bg-gray-100 border-gray-200'}`}>
+                  {isPreview ? (
+                    <MatchCountdown targetDate={match.date} />
+                  ) : (
+                    `${match.team_a_score} - ${match.team_b_score}`
+                  )}
                 </div>
 
                 {/* Squadra B */}
@@ -112,7 +156,7 @@ export default function HomePage() {
             <div className="p-4">
               <div className="text-center text-3xl font-bold mb-6 text-gray-800">
                 {selectedMatch.status === 'scheduled' 
-                  ? <span className="text-yellow-600">VS</span> 
+                  ? <span className="text-yellow-600 text-xl"><MatchCountdown targetDate={selectedMatch.date} /></span> 
                   : `${selectedMatch.team_a_score} - ${selectedMatch.team_b_score}`
                 }
               </div>
@@ -126,7 +170,6 @@ export default function HomePage() {
                         <th className="text-center py-2" title="Gol Fatti">⚽</th>
                         <th className="text-center py-2" title="Assist">👟</th>
                         <th className="text-center py-2" title="Turni in Porta">🧤</th>
-                        {/* ECCOLA QUI SOTTO: L'ICONA MANCANTE */}
                         <th className="text-center py-2" title="Gol Subiti">🥅</th>
                       </>
                     )}
@@ -145,7 +188,6 @@ export default function HomePage() {
                           <td className="text-center font-bold">{stat.goals > 0 ? stat.goals : '-'}</td>
                           <td className="text-center text-gray-500">{stat.assists > 0 ? stat.assists : '-'}</td>
                           <td className="text-center text-gray-500">{stat.gk_turns > 0 ? stat.gk_turns : '-'}</td>
-                          {/* ECCO I DATI MANCANTI */}
                           <td className="text-center font-bold text-red-400">
                             {stat.gk_turns > 0 ? stat.gk_conceded : '-'}
                           </td>

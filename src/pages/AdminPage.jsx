@@ -1,16 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabase';
 import { Link } from 'react-router-dom';
-import { Edit, Trash2, PlusCircle, User, Save } from 'lucide-react';
+import { Edit, Trash2, PlusCircle, User, Save, Pencil, Check, X } from 'lucide-react';
 
 export default function AdminPage({ isAdmin }) {
   const [matches, setMatches] = useState([]);
   const [players, setPlayers] = useState([]);
+  
+  // Stato per l'aggiunta
   const [newName, setNewName] = useState('');
   const [loadingPlayer, setLoadingPlayer] = useState(false);
-  
-  // Riferimento per tenere il cursore attivo
   const inputRef = useRef(null);
+
+  // --- STATI PER LA RINOMINA (EDIT) ---
+  const [editingId, setEditingId] = useState(null); // Chi stiamo modificando?
+  const [editName, setEditName] = useState('');     // Testo temporaneo
 
   useEffect(() => {
     fetchMatches();
@@ -34,41 +38,57 @@ export default function AdminPage({ isAdmin }) {
     setPlayers(data || []);
   }
 
+  // --- AGGIUNGI NUOVO GIOCATORE ---
   async function addPlayer(e) {
     e.preventDefault();
-    const nameToAdd = newName.trim(); // Toglie spazi vuoti prima e dopo
-
+    const nameToAdd = newName.trim();
     if (!nameToAdd) return;
 
-    // --- CONTROLLO DOPPIONI ---
-    // Cerca se esiste già un giocatore con lo stesso nome (ignorando maiuscole/minuscole)
-    const exists = players.some(
-      p => p.name.toLowerCase() === nameToAdd.toLowerCase()
-    );
-
+    const exists = players.some(p => p.name.toLowerCase() === nameToAdd.toLowerCase());
     if (exists) {
       alert(`Attenzione: Il giocatore "${nameToAdd}" esiste già!`);
-      // Mantiene il focus sulla casella per farti correggere
       setTimeout(() => inputRef.current?.focus(), 10);
-      return; // STOP: Non salva nulla
+      return;
     }
     
-    // Se arriviamo qui, il nome è nuovo. Procediamo.
     setLoadingPlayer(true);
-    
     const { error } = await supabase.from('players').insert([{ name: nameToAdd }]);
-    
-    if (error) {
-      alert('Errore database: ' + error.message);
-    } else {
-      setNewName(''); // Pulisci la casella
-      fetchPlayers(); // Aggiorna lista
-      
-      // Mantiene il focus per scrivere il prossimo nome subito
+    if (error) alert('Errore: ' + error.message);
+    else {
+      setNewName('');
+      fetchPlayers();
       setTimeout(() => inputRef.current?.focus(), 10);
     }
     setLoadingPlayer(false);
   }
+
+  // --- RINOMINA GIOCATORE (LOGICA NUOVA) ---
+  const startEditing = (player) => {
+    setEditingId(player.id);
+    setEditName(player.name);
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditName('');
+  };
+
+  const saveEditedName = async (id) => {
+    const nameToSave = editName.trim();
+    if (!nameToSave) return cancelEditing();
+
+    // Controlla doppioni (escludendo se stesso)
+    const exists = players.some(p => p.id !== id && p.name.toLowerCase() === nameToSave.toLowerCase());
+    if (exists) return alert(`Il nome "${nameToSave}" è già usato da un altro giocatore.`);
+
+    const { error } = await supabase.from('players').update({ name: nameToSave }).eq('id', id);
+
+    if (error) alert('Errore aggiornamento: ' + error.message);
+    else {
+      fetchPlayers(); // Ricarica la lista aggiornata
+      setEditingId(null); // Esce dalla modalità modifica
+    }
+  };
 
   async function deletePlayer(id, name) {
     if (!window.confirm(`Eliminare ${name}?`)) return;
@@ -94,6 +114,7 @@ export default function AdminPage({ isAdmin }) {
           <User size={20}/> Anagrafica Giocatori
         </h2>
         
+        {/* Input Aggiungi */}
         <form onSubmit={addPlayer} className="flex gap-2 mb-6">
           <input 
             ref={inputRef}
@@ -102,22 +123,54 @@ export default function AdminPage({ isAdmin }) {
             value={newName}
             onChange={e => setNewName(e.target.value)}
           />
-          <button 
-            type="submit" 
-            disabled={loadingPlayer || !newName}
-            className="bg-blue-600 text-white px-4 rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 transition"
-          >
+          <button type="submit" disabled={loadingPlayer || !newName} className="bg-blue-600 text-white px-4 rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 transition">
             <Save size={20} />
           </button>
         </form>
 
+        {/* Lista Giocatori */}
         <div className="max-h-60 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
           {players.map(player => (
-            <div key={player.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100 group hover:border-blue-200 transition">
-              <span className="font-medium text-gray-700">{player.name}</span>
-              <button onClick={() => deletePlayer(player.id, player.name)} className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-full transition">
-                <Trash2 size={18} />
-              </button>
+            <div key={player.id} className={`flex justify-between items-center p-2 rounded-lg border transition ${editingId === player.id ? 'bg-yellow-50 border-yellow-300' : 'bg-gray-50 border-gray-100 hover:border-blue-200'}`}>
+              
+              {editingId === player.id ? (
+                /* MODALITÀ MODIFICA (Input + Bottoni Salva/Annulla) */
+                <div className="flex items-center gap-2 w-full">
+                  <input 
+                    autoFocus
+                    value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    className="flex-grow p-1 border rounded"
+                    onKeyDown={e => {
+                      if(e.key === 'Enter') saveEditedName(player.id);
+                      if(e.key === 'Escape') cancelEditing();
+                    }}
+                  />
+                  <button onClick={() => saveEditedName(player.id)} className="text-green-600 p-1 hover:bg-green-100 rounded"><Check size={18}/></button>
+                  <button onClick={cancelEditing} className="text-red-500 p-1 hover:bg-red-100 rounded"><X size={18}/></button>
+                </div>
+              ) : (
+                /* MODALITÀ VISUALIZZAZIONE (Nome + Matita + Cestino) */
+                <>
+                  <span className="font-medium text-gray-700 pl-2">{player.name}</span>
+                  <div className="flex gap-1">
+                    <button 
+                      onClick={() => startEditing(player)}
+                      className="text-gray-400 hover:text-blue-600 hover:bg-blue-50 p-2 rounded-full transition"
+                      title="Rinomina"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button 
+                      onClick={() => deletePlayer(player.id, player.name)}
+                      className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-full transition"
+                      title="Elimina"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           ))}
         </div>

@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { useNavigate, useParams } from 'react-router-dom';
 import { DndContext, useDraggable, useDroppable, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { Calendar, Eye, Star } from 'lucide-react';
+import { Calendar, Eye, Star, Clock } from 'lucide-react';
 
-// --- COMPONENTE GIOCATORE (Ora gestisce la Stella MVP) ---
+// --- COMPONENTE GIOCATORE ---
 function DraggablePlayer({ player, team, mvpId, setMvpId }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: player.id,
@@ -16,11 +16,8 @@ function DraggablePlayer({ player, team, mvpId, setMvpId }) {
 
   return (
     <div ref={setNodeRef} style={style} {...listeners} {...attributes} className={`bg-white border p-2 mb-2 rounded shadow-sm touch-none select-none relative ${isMvp ? 'border-yellow-400 ring-2 ring-yellow-100' : 'border-gray-300'}`}>
-      
-      {/* Intestazione: Nome e Stella MVP */}
       <div className="flex justify-between items-start mb-1">
         <div className="font-bold text-gray-800">{player.name}</div>
-        
         {team !== 'pool' && (
           <button 
             onPointerDown={(e) => { e.stopPropagation(); setMvpId(isMvp ? null : player.id); }}
@@ -31,8 +28,6 @@ function DraggablePlayer({ player, team, mvpId, setMvpId }) {
           </button>
         )}
       </div>
-
-      {/* Input Statistiche */}
       {team !== 'pool' && (
         <div className="text-xs grid grid-cols-2 gap-2 mt-2" onPointerDown={(e) => e.stopPropagation()}> 
           <label className="flex flex-col"><span className="text-gray-500">Gol</span>
@@ -77,9 +72,10 @@ export default function MatchCreator() {
   const [teamA, setTeamA] = useState([]);
   const [teamB, setTeamB] = useState([]);
   
-  const [matchDate, setMatchDate] = useState(new Date().toISOString().split('T')[0]);
+  // Per l'input datetime-local usiamo una stringa ISO tagliata (YYYY-MM-DDTHH:mm)
+  const [matchDate, setMatchDate] = useState(new Date().toISOString().slice(0, 16));
   const [isPreview, setIsPreview] = useState(false);
-  const [mvpId, setMvpId] = useState(null); // NUOVO: Tiene traccia dell'ID dell'MVP
+  const [mvpId, setMvpId] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
@@ -95,14 +91,18 @@ export default function MatchCreator() {
     if (id) {
       const { data: matchData } = await supabase.from('matches').select('*').eq('id', id).single();
       if (matchData) {
-        setMatchDate(matchData.date);
+        // Formattiamo la data per l'input
+        if (matchData.date) {
+          const d = new Date(matchData.date);
+          // Trucco per mantenere il fuso orario locale nell'input
+          const offset = d.getTimezoneOffset() * 60000;
+          const localISOTime = (new Date(d - offset)).toISOString().slice(0, 16);
+          setMatchDate(localISOTime);
+        }
         setIsPreview(matchData.status === 'scheduled');
       }
 
-      // Carichiamo anche is_mvp
       const { data: matchStats } = await supabase.from('match_stats').select('player_id, team, goals, assists, gk_turns, gk_conceded, is_mvp').eq('match_id', id);
-      
-      // Cerchiamo chi era l'MVP
       const mvpFound = matchStats.find(s => s.is_mvp);
       if (mvpFound) setMvpId(mvpFound.player_id);
 
@@ -146,7 +146,6 @@ export default function MatchCreator() {
     if (toTeam === 'teamA') setTeamA(p => [...p, playerObj]);
     if (toTeam === 'teamB') setTeamB(p => [...p, playerObj]);
     
-    // Se sposti l'MVP in panchina, togli la stella
     if (toTeam === 'pool' && playerId === mvpId) setMvpId(null);
   };
 
@@ -156,12 +155,14 @@ export default function MatchCreator() {
   const saveMatch = async () => {
     if (teamA.length === 0 || teamB.length === 0) return alert('Attenzione: Squadre vuote!');
     setLoading(true);
-
     const statusValue = isPreview ? 'scheduled' : 'finished';
+    
+    // Convertiamo l'input locale in ISO per il DB
+    const dateToSave = new Date(matchDate).toISOString();
 
     try {
       let matchId = id;
-      const matchDataPayload = { team_a_score: scoreA, team_b_score: scoreB, date: matchDate, status: statusValue };
+      const matchDataPayload = { team_a_score: scoreA, team_b_score: scoreB, date: dateToSave, status: statusValue };
 
       if (!matchId) {
         const { data, error } = await supabase.from('matches').insert([matchDataPayload]).select().single();
@@ -171,7 +172,6 @@ export default function MatchCreator() {
         await supabase.from('match_stats').delete().eq('match_id', matchId);
       }
 
-      // Salviamo is_mvp confrontando l'id
       const statsToInsert = [
         ...teamA.map(p => ({ match_id: matchId, player_id: p.id, team: 'A', is_mvp: p.id === mvpId, ...p.stats })),
         ...teamB.map(p => ({ match_id: matchId, player_id: p.id, team: 'B', is_mvp: p.id === mvpId, ...p.stats }))
@@ -179,7 +179,6 @@ export default function MatchCreator() {
 
       const { error: statsError } = await supabase.from('match_stats').insert(statsToInsert);
       if (statsError) throw statsError;
-
       navigate('/');
     } catch (error) {
       alert('Errore: ' + error.message);
@@ -193,12 +192,12 @@ export default function MatchCreator() {
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
       <div className="p-2 pb-24 max-w-lg mx-auto">
-        
         <div className="bg-white p-4 rounded-xl shadow mb-4 border border-gray-200">
           <div className="flex gap-4 mb-3">
              <div className="flex-1">
-                <label className="text-xs font-bold text-gray-500 mb-1 flex items-center gap-1"><Calendar size={14}/> DATA</label>
-                <input type="date" value={matchDate} onChange={(e) => setMatchDate(e.target.value)} className="w-full border p-2 rounded bg-gray-50 font-bold"/>
+                <label className="text-xs font-bold text-gray-500 mb-1 flex items-center gap-1"><Calendar size={14}/> DATA E ORA</label>
+                {/* CAMBIATO IN datetime-local */}
+                <input type="datetime-local" value={matchDate} onChange={(e) => setMatchDate(e.target.value)} className="w-full border p-2 rounded bg-gray-50 font-bold text-sm"/>
              </div>
              <div className="flex-1">
                 <label className="text-xs font-bold text-gray-500 mb-1 flex items-center gap-1"><Eye size={14}/> STATO</label>
@@ -208,12 +207,14 @@ export default function MatchCreator() {
                 </label>
              </div>
           </div>
-          {isPreview && <div className="text-xs text-center text-yellow-600 font-medium">⚠️ Questa partita non conterà nelle statistiche</div>}
+          {isPreview && <div className="text-xs text-center text-yellow-600 font-medium">⚠️ Partita programmata (Countdown attivo)</div>}
         </div>
 
         <div className={`flex justify-between items-center text-white p-4 rounded-xl mb-4 shadow-lg sticky top-20 z-40 ${isPreview ? 'bg-gray-600' : 'bg-gray-800'}`}>
           <div className="text-center"><div className="text-3xl font-bold text-blue-400">{isPreview ? '?' : scoreA}</div><div className="text-xs uppercase">Squadra A</div></div>
-          <div className="text-xl font-bold text-gray-300">{isPreview ? 'VS' : (id ? "MODIFICA" : "NUOVA")}</div>
+          <div className="text-xl font-bold text-gray-300 flex flex-col items-center">
+             {isPreview ? <Clock size={24}/> : (id ? "MODIFICA" : "NUOVA")}
+          </div>
           <div className="text-center"><div className="text-3xl font-bold text-red-400">{isPreview ? '?' : scoreB}</div><div className="text-xs uppercase">Squadra B</div></div>
         </div>
 
