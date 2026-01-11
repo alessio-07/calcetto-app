@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabase';
 import { X, Star, Clock, Share2 } from 'lucide-react';
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
 
 // --- COMPONENTE COUNTDOWN ---
 function MatchCountdown({ targetDate }) {
@@ -42,7 +42,7 @@ function MatchCountdown({ targetDate }) {
 export default function HomePage() {
   const [matches, setMatches] = useState([]);
   const [selectedMatch, setSelectedMatch] = useState(null);
-  const printRef = useRef(null);
+  const exportRef = useRef(null); // Ref per l'elemento da fotografare
 
   useEffect(() => {
     fetchMatches();
@@ -78,20 +78,21 @@ export default function HomePage() {
   };
 
   const handleShare = async () => {
-    if (!printRef.current) return;
+    if (!exportRef.current) return;
+    
     try {
-      // Piccolo ritardo per assicurare il rendering dei font
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      const canvas = await html2canvas(printRef.current, {
+      // Aspettiamo un attimo per essere sicuri che il browser abbia "dipinto" la tabella nascosta
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      const dataUrl = await toPng(exportRef.current, { 
+        cacheBust: true, 
         backgroundColor: '#ffffff',
-        scale: 3, 
-        useCORS: true,
-        logging: false,
+        pixelRatio: 2, // Alta qualità
+        width: 650,    // Larghezza fissa
       });
-      const dataUrl = canvas.toDataURL('image/png');
+      
       const blob = await (await fetch(dataUrl)).blob();
-      const file = new File([blob], 'match-stats.png', { type: 'image/png' });
+      const file = new File([blob], 'risultato-partita.png', { type: 'image/png' });
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
@@ -106,12 +107,12 @@ export default function HomePage() {
       }
     } catch (error) {
       console.error("Errore condivisione:", error);
-      alert("Impossibile condividere su questo dispositivo.");
+      alert("Errore immagine. Riprova.");
     }
   };
 
   return (
-    <div className="p-4 pb-24">
+    <div className="p-4 pb-24 relative min-h-screen">
       <h1 className="text-2xl font-bold mb-6 text-gray-800">Partite</h1>
       
       {matches.length === 0 ? <p className="text-gray-500">Nessuna partita.</p> : null}
@@ -168,14 +169,14 @@ export default function HomePage() {
         })}
       </div>
 
-      {/* MODALE DETTAGLI */}
+      {/* --- MODALE VISIBILE (Per l'utente) --- */}
       {selectedMatch && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSelectedMatch(null)}>
           <div className="bg-white w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
             
             <div className="sticky top-0 bg-gray-100 p-4 flex justify-between items-center border-b z-10">
               <h2 className="font-bold text-lg">
-                {selectedMatch.status === 'scheduled' ? 'Dettagli Anteprima' : 'Risultato'}
+                {selectedMatch.status === 'scheduled' ? 'Anteprima' : 'Risultato'}
               </h2>
               <div className="flex gap-2">
                 <button onClick={handleShare} className="p-2 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition">
@@ -187,93 +188,147 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* CONTENUTO DA FOTOGRAFARE */}
-            <div ref={printRef} className="p-6 bg-white">
-              <div className="text-center text-gray-400 text-xs uppercase font-bold mb-2">
-                 {new Date(selectedMatch.date).toLocaleDateString('it-IT', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-              </div>
-
-              <div className="text-center text-4xl font-bold mb-8 text-gray-800">
+            <div className="p-6 bg-white">
+              <div className="text-center text-4xl font-bold mb-6 text-gray-800">
                 {selectedMatch.status === 'scheduled' 
                   ? <span className="text-yellow-600 text-2xl"><MatchCountdown targetDate={selectedMatch.date} /></span> 
                   : `${selectedMatch.team_a_score} - ${selectedMatch.team_b_score}`
                 }
               </div>
 
-              <table className="w-full text-sm border-collapse">
+              <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-gray-500 text-xs border-b-2 border-gray-100">
-                    <th className="text-left py-4 font-semibold">Formazioni</th>
+                  <tr className="text-gray-500 text-xs border-b">
+                    <th className="text-left py-2">Formazioni</th>
                     {selectedMatch.status !== 'scheduled' && (
                       <>
-                        <th className="text-center py-4 w-12" title="Gol Fatti">⚽</th>
-                        <th className="text-center py-4 w-12" title="Assist">👟</th>
-                        <th className="text-center py-4 w-12" title="Turni in Porta">🧤</th>
-                        <th className="text-center py-4 w-12" title="Gol Subiti">🥅</th>
+                        <th className="text-center py-2">⚽</th>
+                        <th className="text-center py-2">👟</th>
+                        <th className="text-center py-2">🧤</th>
+                        <th className="text-center py-2">🥅</th>
                       </>
                     )}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y">
                   {selectedMatch.match_stats.map(stat => (
-                    <tr key={stat.id} className={stat.team === 'A' ? 'bg-blue-50/30' : 'bg-red-50/30'}>
-                      {/* CELLE CON FLEXBOX PER CENTRATURA PERFETTA */}
-                      <td className="py-2 pl-2 font-medium h-12">
-                        <div className="flex items-center h-full gap-2">
-                          <span className={`w-1.5 h-5 rounded-full shrink-0 ${stat.team === 'A' ? 'bg-blue-500' : 'bg-red-500'}`}></span>
-                          <span className="truncate">{stat.players?.name}</span>
-                          {stat.is_mvp && <Star size={15} className="text-yellow-500 fill-yellow-500 shrink-0" />}
-                        </div>
+                    <tr key={stat.id} className={stat.team === 'A' ? 'bg-blue-50/50' : 'bg-red-50/50'}>
+                      <td className="py-3 font-medium flex items-center gap-1">
+                        <span className={`w-1 h-4 rounded mr-2 ${stat.team === 'A' ? 'bg-blue-500' : 'bg-red-500'}`}></span>
+                        {stat.players?.name}
+                        {stat.is_mvp && <Star size={14} className="text-yellow-500 fill-yellow-500 ml-1" />}
                       </td>
                       {selectedMatch.status !== 'scheduled' && (
                         <>
-                          <td className="h-12 text-base font-bold text-gray-800">
-                            <div className="flex items-center justify-center h-full">
-                              {stat.goals > 0 ? stat.goals : '-'}
-                            </div>
-                          </td>
-                          <td className="h-12 text-gray-500">
-                             <div className="flex items-center justify-center h-full">
-                               {stat.assists > 0 ? stat.assists : '-'}
-                             </div>
-                          </td>
-                          <td className="h-12 text-gray-500">
-                             <div className="flex items-center justify-center h-full">
-                               {stat.gk_turns > 0 ? stat.gk_turns : '-'}
-                             </div>
-                          </td>
-                          <td className="h-12 font-bold text-red-400">
-                             <div className="flex items-center justify-center h-full">
-                               {stat.gk_turns > 0 ? stat.gk_conceded : '-'}
-                             </div>
-                          </td>
+                          <td className="text-center font-bold">{stat.goals > 0 ? stat.goals : '-'}</td>
+                          <td className="text-center text-gray-500">{stat.assists > 0 ? stat.assists : '-'}</td>
+                          <td className="text-center text-gray-500">{stat.gk_turns > 0 ? stat.gk_turns : '-'}</td>
+                          <td className="text-center font-bold text-red-400">{stat.gk_turns > 0 ? stat.gk_conceded : '-'}</td>
                         </>
                       )}
                     </tr>
                   ))}
                 </tbody>
               </table>
-              
-              {/* LEGENDA CORRETTA */}
-              <div className="mt-8 pt-4 border-t text-[10px] text-gray-400 text-center flex flex-wrap justify-center items-center gap-4 uppercase tracking-wider font-medium">
-                 <span>Legenda:</span>
-                 <span>⚽ Gol</span> 
-                 <span>👟 Assist</span> 
-                 <span>🧤 Turni Porta</span> 
-                 <span>🥅 Gol Subiti</span>
-                 {/* STELLA CENTRATA CON FLEX INLINE */}
-                 <span className="inline-flex items-center gap-1">
-                   <Star size={12} className="fill-yellow-500 text-yellow-500 mb-0.5"/> MVP
-                 </span>
-              </div>
-
               {selectedMatch.status === 'scheduled' && (
-                <p className="text-center text-sm text-gray-500 mt-8 italic">
-                  Partita non ancora giocata. Statistiche non disponibili.
-                </p>
+                <p className="text-center text-sm text-gray-500 mt-4 italic">Statistiche non disponibili.</p>
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* --- HIDDEN EXPORT LAYOUT (PER LA FOTO) --- */}
+      {/* TRUCCO: position: fixed + top: 0 + z-index: -50.
+          È DENTRO lo schermo, ma SOTTO tutto il resto. 
+          Il browser è costretto a disegnarlo, quindi la foto esce!
+      */}
+      {selectedMatch && (
+        <div ref={exportRef} style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '650px',
+            zIndex: -50, // SOTTO AL SITO
+            backgroundColor: 'white',
+            padding: '40px',
+            boxSizing: 'border-box',
+            pointerEvents: 'none', // Non cliccabile
+        }}>
+           <div className="text-center text-gray-400 text-sm uppercase font-bold mb-2 tracking-widest">
+              {new Date(selectedMatch.date).toLocaleDateString('it-IT', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+           </div>
+
+           <div className="text-center text-6xl font-black mb-10 text-gray-800 tracking-tighter">
+             {selectedMatch.status === 'scheduled' 
+               ? <span className="text-yellow-600">VS</span> 
+               : `${selectedMatch.team_a_score} - ${selectedMatch.team_b_score}`
+             }
+           </div>
+
+           {/* Uso una TABELLA NORMALE, html-to-image la renderizza bene se è in vista */}
+           <table className="w-full text-base border-collapse">
+             <thead>
+               <tr className="text-gray-500 text-xs uppercase border-b-2 border-gray-200">
+                 <th className="text-left py-4 font-bold pl-2 w-[40%]">Giocatori</th>
+                 {selectedMatch.status !== 'scheduled' && (
+                   <>
+                     <th className="text-center py-4 w-[15%]" title="Gol Fatti">GOAL</th>
+                     <th className="text-center py-4 w-[15%]" title="Assist">ASSIST</th>
+                     <th className="text-center py-4 w-[15%]" title="Turni in Porta">PORTA</th>
+                     <th className="text-center py-4 w-[15%]" title="Gol Subiti">SUBITI</th>
+                   </>
+                 )}
+               </tr>
+             </thead>
+             <tbody className="divide-y divide-gray-100">
+               {selectedMatch.match_stats.map(stat => (
+                 <tr key={stat.id} className={`h-16 ${stat.team === 'A' ? 'bg-blue-50' : 'bg-red-50'}`}>
+                   
+                   <td className="pl-4 align-middle">
+                     <div className="flex items-center gap-3">
+                       <span className={`w-2 h-8 rounded-full ${stat.team === 'A' ? 'bg-blue-600' : 'bg-red-600'}`}></span>
+                       <span className="font-bold text-gray-800 text-lg">{stat.players?.name}</span>
+                       {stat.is_mvp && <Star size={20} className="text-yellow-500 fill-yellow-500" />}
+                     </div>
+                   </td>
+
+                   {selectedMatch.status !== 'scheduled' && (
+                     <>
+                       <td className="text-center align-middle">
+                         <span className={`font-bold text-xl ${stat.goals > 0 ? 'text-gray-900' : 'text-gray-300'}`}>
+                           {stat.goals > 0 ? stat.goals : '-'}
+                         </span>
+                       </td>
+                       <td className="text-center align-middle">
+                          <span className={`font-medium text-lg ${stat.assists > 0 ? 'text-gray-600' : 'text-gray-300'}`}>
+                            {stat.assists > 0 ? stat.assists : '-'}
+                          </span>
+                       </td>
+                       <td className="text-center align-middle">
+                          <span className={`font-medium text-lg ${stat.gk_turns > 0 ? 'text-gray-600' : 'text-gray-300'}`}>
+                            {stat.gk_turns > 0 ? stat.gk_turns : '-'}
+                          </span>
+                       </td>
+                       <td className="text-center align-middle">
+                          <span className={`font-bold text-xl ${stat.gk_turns > 0 ? 'text-red-500' : 'text-gray-300'}`}>
+                            {stat.gk_turns > 0 ? stat.gk_conceded : '-'}
+                          </span>
+                       </td>
+                     </>
+                   )}
+                 </tr>
+               ))}
+             </tbody>
+           </table>
+
+           <div className="mt-10 pt-6 border-t-2 border-gray-100 flex justify-center gap-8 text-xs font-bold text-gray-400 uppercase tracking-widest">
+              <div className="flex items-center gap-2"><span className="text-lg">⚽</span> GOAL</div>
+              <div className="flex items-center gap-2"><span className="text-lg">👟</span> ASSIST</div>
+              <div className="flex items-center gap-2"><span className="text-lg">🧤</span> TURNI PORTA</div>
+              <div className="flex items-center gap-2"><span className="text-lg">🥅</span> SUBITI</div>
+              <div className="flex items-center gap-1 text-yellow-500"><Star size={16} className="fill-yellow-500"/> MVP</div>
+           </div>
         </div>
       )}
     </div>
