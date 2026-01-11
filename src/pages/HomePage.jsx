@@ -230,6 +230,19 @@ export default function HomePage() {
                   ))}
                 </tbody>
               </table>
+              
+              {/* LEGENDA VISIBILE */}
+              <div className="mt-8 pt-4 border-t text-[10px] text-gray-400 text-center flex flex-wrap justify-center items-center gap-4 uppercase tracking-wider font-medium">
+                 <span>Legenda:</span>
+                 <span>⚽ Gol</span> 
+                 <span>👟 Assist</span> 
+                 <span>🧤 Turni Porta</span> 
+                 <span>🥅 Gol Subiti</span>
+                 <span className="flex items-center gap-1">
+                   <Star size={12} className="fill-yellow-500 text-yellow-500"/> MVP
+                 </span>
+              </div>
+
               {selectedMatch.status === 'scheduled' && (
                 <p className="text-center text-sm text-gray-500 mt-4 italic">Statistiche non disponibili.</p>
               )}
@@ -239,10 +252,7 @@ export default function HomePage() {
       )}
 
       {/* --- HIDDEN EXPORT LAYOUT (PER LA FOTO) --- */}
-      {/* TRUCCO: position: fixed + top: 0 + z-index: -50.
-          È DENTRO lo schermo, ma SOTTO tutto il resto. 
-          Il browser è costretto a disegnarlo, quindi la foto esce!
-      */}
+      {/* Stile ottimizzato per l'esportazione immagine */}
       {selectedMatch && (
         <div ref={exportRef} style={{
             position: 'fixed',
@@ -253,7 +263,7 @@ export default function HomePage() {
             backgroundColor: 'white',
             padding: '40px',
             boxSizing: 'border-box',
-            pointerEvents: 'none', // Non cliccabile
+            pointerEvents: 'none', 
         }}>
            <div className="text-center text-gray-400 text-sm uppercase font-bold mb-2 tracking-widest">
               {new Date(selectedMatch.date).toLocaleDateString('it-IT', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
@@ -266,17 +276,17 @@ export default function HomePage() {
              }
            </div>
 
-           {/* Uso una TABELLA NORMALE, html-to-image la renderizza bene se è in vista */}
            <table className="w-full text-base border-collapse">
              <thead>
                <tr className="text-gray-500 text-xs uppercase border-b-2 border-gray-200">
                  <th className="text-left py-4 font-bold pl-2 w-[40%]">Giocatori</th>
                  {selectedMatch.status !== 'scheduled' && (
                    <>
-                     <th className="text-center py-4 w-[15%]" title="Gol Fatti">GOAL</th>
-                     <th className="text-center py-4 w-[15%]" title="Assist">ASSIST</th>
-                     <th className="text-center py-4 w-[15%]" title="Turni in Porta">PORTA</th>
-                     <th className="text-center py-4 w-[15%]" title="Gol Subiti">SUBITI</th>
+                     {/* HO RIMESSO LE EMOJI ANCHE QUI, CON TESTO PIÙ GRANDE PER LA FOTO */}
+                     <th className="text-center py-4 w-[15%] text-2xl" title="Gol Fatti">⚽</th>
+                     <th className="text-center py-4 w-[15%] text-2xl" title="Assist">👟</th>
+                     <th className="text-center py-4 w-[15%] text-2xl" title="Turni in Porta">🧤</th>
+                     <th className="text-center py-4 w-[15%] text-2xl" title="Gol Subiti">🥅</th>
                    </>
                  )}
                </tr>
