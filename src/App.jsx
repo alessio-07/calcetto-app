@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import { supabase } from './supabase';
 import { Trophy, Home, Shield, LogIn, LogOut, UserPlus } from 'lucide-react';
 
@@ -204,6 +205,7 @@ export default function App() {
         </div>
 
         <BottomNav isAdmin={isAdmin} />
+        <Analytics />
       </div>
     </BrowserRouter>
   );
