@@ -2,8 +2,71 @@ import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { supabase } from '../supabase';
 import Header from '../components/Header';
-import { Save, Star, Shield, Goal, Footprints } from 'lucide-react';
+import { Save, Star, Shield, Goal, Footprints, ChevronUp, ChevronDown } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
+
+// --- COMPONENTE INPUT PERSONALIZZATO (StatInput) ---
+const StatInput = ({ label, icon: Icon, value, onChange, colorLabel, colorBorder }) => {
+  
+  // Se è 0 mostra stringa vuota, altrimenti il numero
+  const displayValue = value === 0 ? '' : value;
+
+  const handleChange = (e) => {
+    const val = e.target.value;
+    // Se vuoto diventa 0, altrimenti il numero intero
+    onChange(val === '' ? 0 : parseInt(val));
+  };
+
+  const handleStep = (amount) => {
+    // Incrementa o decrementa (minimo 0)
+    const newValue = Math.max(0, (value || 0) + amount);
+    onChange(newValue);
+  };
+
+  return (
+    <div className="flex flex-col items-center w-14">
+      {/* Label */}
+      <label className={`text-[9px] ${colorLabel} font-bold mb-0.5 flex items-center gap-0.5`}>
+        {Icon && <Icon size={10} />} {label}
+      </label>
+      
+      {/* Container Input + Frecce */}
+      <div className="relative w-full flex items-center bg-slate-800 border border-slate-600 rounded overflow-hidden focus-within:border-slate-400 transition-colors">
+        
+        {/* Input Numerico */}
+        <input
+          type="number"
+          min="0"
+          value={displayValue}
+          onFocus={(e) => e.target.select()} // AUTO-SELEZIONE
+          onPointerDown={(e) => e.stopPropagation()} // STOP DRAG
+          onChange={handleChange}
+          placeholder="0" // Placeholder visivo
+          className={`w-full bg-transparent text-center text-white font-mono text-sm py-1 pl-1 focus:outline-none appearance-none`} 
+          style={{ MozAppearance: 'textfield' }} // Rimuove spinner nativi Firefox
+        />
+
+        {/* Frecce Custom (Steppers) */}
+        <div className="flex flex-col border-l border-slate-600">
+          <button 
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => handleStep(1)}
+            className="bg-slate-700 hover:bg-slate-600 text-slate-300 px-0.5 h-3.5 flex items-center justify-center border-b border-slate-600 active:bg-slate-500"
+          >
+            <ChevronUp size={10} />
+          </button>
+          <button 
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => handleStep(-1)}
+            className="bg-slate-700 hover:bg-slate-600 text-slate-300 px-0.5 h-3.5 flex items-center justify-center active:bg-slate-500"
+          >
+            <ChevronDown size={10} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // --- COMPONENTE CARD GIOCATORE (Draggable) ---
 const DraggablePlayer = ({ player, index, listType, onUpdateStat }) => {
@@ -50,59 +113,42 @@ const DraggablePlayer = ({ player, index, listType, onUpdateStat }) => {
             )}
           </div>
 
-          {/* SECTION STATISTICHE */}
+          {/* SECTION STATISTICHE (Usa i nuovi StatInput) */}
           {isTeam && (
-            <div className="bg-slate-900/50 p-2 flex items-center justify-between gap-2 border-t border-slate-700">
+            <div className="bg-slate-900/50 p-2 flex items-center justify-between gap-1 border-t border-slate-700">
               
-              <div className="flex flex-col items-center w-12">
-                <label className="text-[9px] text-cyan-400 font-bold mb-0.5"><Goal size={10} className="inline"/> GOL</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={player.goals || 0}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onChange={(e) => onUpdateStat(player.id, listType, 'goals', parseInt(e.target.value) || 0)}
-                  className="w-full bg-slate-800 border border-slate-600 rounded text-center text-white font-mono text-sm py-1 focus:border-cyan-500 outline-none"
-                />
-              </div>
+              <StatInput 
+                label="GOL" 
+                icon={Goal} 
+                value={player.goals || 0} 
+                onChange={(val) => onUpdateStat(player.id, listType, 'goals', val)}
+                colorLabel="text-cyan-400"
+              />
 
-              <div className="flex flex-col items-center w-12">
-                <label className="text-[9px] text-fuchsia-400 font-bold mb-0.5"><Footprints size={10} className="inline"/> AST</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={player.assists || 0}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onChange={(e) => onUpdateStat(player.id, listType, 'assists', parseInt(e.target.value) || 0)}
-                  className="w-full bg-slate-800 border border-slate-600 rounded text-center text-white font-mono text-sm py-1 focus:border-fuchsia-500 outline-none"
-                />
-              </div>
+              <StatInput 
+                label="AST" 
+                icon={Footprints} 
+                value={player.assists || 0} 
+                onChange={(val) => onUpdateStat(player.id, listType, 'assists', val)}
+                colorLabel="text-fuchsia-400"
+              />
 
               <div className="w-px h-8 bg-slate-700 mx-1"></div>
 
-              <div className="flex flex-col items-center w-12">
-                <label className="text-[9px] text-slate-400 font-bold mb-0.5"><Shield size={10} className="inline"/> GK</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={player.gk_turns || 0}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onChange={(e) => onUpdateStat(player.id, listType, 'gk_turns', parseInt(e.target.value) || 0)}
-                  className="w-full bg-slate-800 border border-slate-600 rounded text-center text-slate-300 font-mono text-sm py-1 focus:border-slate-400 outline-none"
-                />
-              </div>
+              <StatInput 
+                label="GK" 
+                icon={Shield} 
+                value={player.gk_turns || 0} 
+                onChange={(val) => onUpdateStat(player.id, listType, 'gk_turns', val)}
+                colorLabel="text-slate-400"
+              />
 
-              <div className="flex flex-col items-center w-12">
-                <label className="text-[9px] text-red-400 font-bold mb-0.5">SUB</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={player.gk_conceded || 0}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onChange={(e) => onUpdateStat(player.id, listType, 'gk_conceded', parseInt(e.target.value) || 0)}
-                  className="w-full bg-slate-800 border border-slate-600 rounded text-center text-red-300 font-mono text-sm py-1 focus:border-red-500 outline-none"
-                />
-              </div>
+              <StatInput 
+                label="SUB" 
+                value={player.gk_conceded || 0} 
+                onChange={(val) => onUpdateStat(player.id, listType, 'gk_conceded', val)}
+                colorLabel="text-red-400"
+              />
 
             </div>
           )}
@@ -127,7 +173,7 @@ const TeamColumn = ({ title, id, players, colorClass, placeholder, onUpdateStat 
             {...provided.droppableProps}
             className={`
               flex-1 p-2 rounded-b-xl border-x border-b border-slate-700/50 transition-colors
-              min-h-[300px] // Area di rilascio MOLTO grande
+              min-h-[300px] 
               ${snapshot.isDraggingOver ? 'bg-slate-700/30 ring-2 ring-inset ring-cyan-500/30' : 'bg-slate-900/30'}
             `}
           >
@@ -154,7 +200,7 @@ export default function MatchCreator({ session }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [isDragging, setIsDragging] = useState(false); // NUOVO STATO: Traccia se stai trascinando
+  const [isDragging, setIsDragging] = useState(false); 
   
   // STATO LISTE
   const [bench, setBench] = useState([]);
@@ -170,12 +216,15 @@ export default function MatchCreator({ session }) {
   };
   const [date, setDate] = useState(toLocalISO(new Date()));
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    loadData();
+  }, []);
 
   async function loadData() {
     setLoading(true);
     const { data: allPlayers } = await supabase.from('players').select('*').order('name');
     
+    // Inizializza statistiche a 0
     const initializedPlayers = allPlayers.map(p => ({
         ...p, goals: 0, assists: 0, gk_turns: 0, gk_conceded: 0, is_mvp: false
     }));
@@ -217,12 +266,12 @@ export default function MatchCreator({ session }) {
 
   // --- DRAG GESTIONE ---
   const onDragStart = () => {
-    setIsDragging(true); // Disabilita lo SNAP CSS
+    setIsDragging(true); 
     if (navigator.vibrate) navigator.vibrate(10);
   };
 
   const onDragEnd = (result) => {
-    setIsDragging(false); // Riabilita lo SNAP CSS
+    setIsDragging(false); 
     const { source, destination } = result;
     if (!destination) return;
     if (source.droppableId === destination.droppableId && source.index === destination.index) return;
@@ -340,13 +389,8 @@ export default function MatchCreator({ session }) {
       <DragDropContext onDragEnd={onDragEnd} onDragStart={onDragStart}>
         <div className="flex flex-col lg:flex-row gap-6">
           
-          {/* CONTAINER SQUADRE: 
-             - overflow-x-auto per lo scroll
-             - snap-x disabilitato se isDragging è true
-          */}
           <div className={`flex gap-4 overflow-x-auto pb-2 lg:w-2/3 ${isDragging ? '' : 'snap-x snap-mandatory'}`}>
              
-             {/* SQUADRA A */}
              <div className="snap-center min-w-[85vw] md:min-w-[45%] h-full">
                 <TeamColumn 
                   title="SQUADRA A" 
@@ -358,7 +402,6 @@ export default function MatchCreator({ session }) {
                 />
              </div>
 
-             {/* SQUADRA B */}
              <div className="snap-center min-w-[85vw] md:min-w-[45%] h-full">
                 <TeamColumn 
                   title="SQUADRA B" 
@@ -371,7 +414,6 @@ export default function MatchCreator({ session }) {
              </div>
           </div>
 
-          {/* PANCHINA */}
           <div className="mt-4 lg:mt-0 lg:w-1/3">
              <div className="p-3 bg-slate-800 rounded-t-xl font-bold font-oswald tracking-widest text-center border-b-4 border-slate-600 text-slate-400 shadow-md">
                DISPONIBILI <span className="text-xs font-normal opacity-70">({bench.length})</span>
