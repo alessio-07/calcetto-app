@@ -2,6 +2,77 @@ import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabase';
 import { X, Star, Clock, Share2 } from 'lucide-react';
 import { toPng } from 'html-to-image';
+import Header from '../components/Header';
+import { useNavigate } from 'react-router-dom';
+
+// --- LOGICA AVATAR E INIZIALI ---
+const getUniquePrefix = (targetName, allNames) => {
+  if (!targetName) return { main: '?', sub: '' };
+  
+  const cleanTarget = targetName.trim().toUpperCase();
+  const otherNames = allNames
+    .map(n => n?.trim().toUpperCase())
+    .filter(n => n !== cleanTarget); 
+
+  let length = 1;
+  while (length <= cleanTarget.length) {
+    const prefix = cleanTarget.substring(0, length);
+    const collision = otherNames.some(other => other.startsWith(prefix));
+    
+    if (!collision) {
+      return { 
+        main: prefix.charAt(0), 
+        sub: prefix.substring(1).toLowerCase() 
+      };
+    }
+    length++;
+  }
+  return { main: cleanTarget.charAt(0), sub: cleanTarget.substring(1).toLowerCase() };
+};
+
+// Componente Singolo Avatar
+const PlayerAvatar = ({ player, team, isMvp, overlapClass, allTeamPlayers }) => {
+  const navigate = useNavigate();
+  const allNames = allTeamPlayers.map(p => p.name);
+  const { main, sub } = getUniquePrefix(player.name, allNames);
+
+  const bgClass = team === 'A' 
+    ? 'bg-gradient-to-br from-cyan-400 to-cyan-600' 
+    : 'bg-gradient-to-br from-fuchsia-400 to-fuchsia-600';
+
+  const borderClass = isMvp 
+    ? 'ring-1 md:ring-2 ring-inset ring-yellow-400' 
+    : 'ring-1 md:ring-2 ring-inset ring-slate-800';
+
+  // Gestione Click Intelligente
+  const handleAvatarClick = (e) => {
+    // Se siamo su mobile (< 768px), non fare nulla qui. 
+    // Il click "bucherà" questo div e verrà catturato dalla Card della partita, aprendo il modale.
+    if (window.innerWidth < 768) return;
+
+    // Se siamo su PC, ferma la propagazione (non aprire il modale) e vai al giocatore.
+    e.stopPropagation(); 
+    navigate('/players', { state: { targetPlayerId: player.id } });
+  };
+
+  return (
+    <div 
+      onClick={handleAvatarClick}
+      className={`relative w-6 h-6 sm:w-10 sm:h-10 md:w-14 md:h-14 rounded-full overflow-hidden flex items-center justify-center text-white font-bold shrink-0 z-10 ${bgClass} ${borderClass} ${overlapClass} 
+      md:cursor-pointer md:hover:scale-110 md:transition-transform`} // Cursore e hover solo su PC
+      title={player.name}
+    >
+      {player.avatar_url ? (
+        <img src={player.avatar_url} alt={player.name} className="w-full h-full rounded-full object-cover" />
+      ) : (
+        <div className="flex items-baseline leading-none drop-shadow-md">
+          <span className="text-[9px] sm:text-sm md:text-2xl font-oswald">{main}</span>
+          {sub && <span className="text-[7px] sm:text-[9px] md:text-xs italic ml-[0.5px] opacity-90">{sub}</span>}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // --- COMPONENTE COUNTDOWN ---
 function MatchCountdown({ targetDate }) {
@@ -35,14 +106,15 @@ function MatchCountdown({ targetDate }) {
     return () => clearInterval(timer);
   }, [targetDate]);
 
-  return <span className="text-yellow-800 tracking-tight">{timeLeft}</span>;
+  return <span className="text-lime-400 tracking-tight font-oswald">{timeLeft}</span>;
 }
 
 // --- PAGINA HOME PRINCIPALE ---
-export default function HomePage() {
+export default function HomePage({ session }) {
   const [matches, setMatches] = useState([]);
   const [selectedMatch, setSelectedMatch] = useState(null);
-  const exportRef = useRef(null); // Ref per l'elemento da fotografare
+  const exportRef = useRef(null);
+  const navigate = useNavigate(); // Serve per navigare dal modale
 
   useEffect(() => {
     fetchMatches();
@@ -60,7 +132,8 @@ export default function HomePage() {
           gk_turns,
           gk_conceded,
           is_mvp,
-          players ( name )
+          player_id,
+          players ( * ) 
         )
       `)
       .order('date', { ascending: false });
@@ -69,36 +142,30 @@ export default function HomePage() {
     else setMatches(data || []);
   }
 
-  const getTeamNames = (matchStats, teamLetter) => {
-    if (!matchStats) return '';
+  const getTeamPlayers = (matchStats, teamLetter) => {
+    if (!matchStats) return [];
     return matchStats
       .filter(s => s.team === teamLetter)
-      .map(s => s.players?.name || 'Sconosciuto')
-      .join(', ');
+      .map(s => ({
+        ...s.players, 
+        is_mvp: s.is_mvp 
+      }));
   };
 
   const handleShare = async () => {
     if (!exportRef.current) return;
-    
     try {
-      // Aspettiamo un attimo per essere sicuri che il browser abbia "dipinto" la tabella nascosta
       await new Promise(resolve => setTimeout(resolve, 500));
-
       const dataUrl = await toPng(exportRef.current, { 
         cacheBust: true, 
-        backgroundColor: '#ffffff',
-        pixelRatio: 2, // Alta qualità
-        width: 650,    // Larghezza fissa
+        backgroundColor: '#0f172a', 
+        pixelRatio: 2, 
+        width: 650,    
       });
-      
       const blob = await (await fetch(dataUrl)).blob();
       const file = new File([blob], 'risultato-partita.png', { type: 'image/png' });
-
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: 'Risultato Partita',
-        });
+        await navigator.share({ files: [file], title: 'Risultato Partita' });
       } else {
         const link = document.createElement('a');
         link.download = `partita-${selectedMatch.date.split('T')[0]}.png`;
@@ -107,61 +174,93 @@ export default function HomePage() {
       }
     } catch (error) {
       console.error("Errore condivisione:", error);
-      alert("Errore immagine. Riprova.");
+      alert("Errore nella generazione dell'immagine.");
     }
   };
 
+  // Navigazione dal nome nel modale
+  const goToPlayer = (playerId) => {
+    navigate('/players', { state: { targetPlayerId: playerId } });
+  };
+
   return (
-    <div className="p-4 pb-24 relative min-h-screen">
-      <h1 className="text-2xl font-bold mb-6 text-gray-800">Partite</h1>
+    <div className="w-full min-h-screen bg-slate-900 text-slate-100 p-4 pb-24">
       
-      {matches.length === 0 ? <p className="text-gray-500">Nessuna partita.</p> : null}
+      <Header title="Partite" session={session} />
       
-      <div className="space-y-4">
+      {matches.length === 0 ? <p className="text-slate-500">Nessuna partita trovata.</p> : null}
+      
+      <div className="space-y-6">
         {matches.map(match => {
           const isPreview = match.status === 'scheduled';
+          const teamAPlayers = getTeamPlayers(match.match_stats, 'A');
+          const teamBPlayers = getTeamPlayers(match.match_stats, 'B');
 
           return (
             <div 
               key={match.id} 
               onClick={() => setSelectedMatch(match)}
-              className={`p-5 rounded-xl shadow-sm border cursor-pointer hover:shadow-md transition active:scale-95 ${isPreview ? 'bg-yellow-50 border-yellow-200' : 'bg-white border-gray-100'}`}
+              className={`relative p-3 sm:p-6 rounded-3xl shadow-xl cursor-pointer transition-transform active:scale-95 overflow-hidden group border border-slate-700/50 
+              bg-gradient-to-br from-cyan-950/40 via-slate-800 to-fuchsia-950/40 hover:from-cyan-900/50 hover:to-fuchsia-900/50`}
             >
-              <div className="flex justify-between items-center mb-3">
-                 <div className="text-gray-400 text-xs font-bold uppercase tracking-wider flex items-center gap-1">
+              {/* Header Data */}
+              <div className="flex justify-between items-center mb-4 sm:mb-8">
+                 <div className="text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-widest flex items-center gap-2 font-oswald">
                     {new Date(match.date).toLocaleDateString('it-IT')}
-                    {isPreview && <span> - {new Date(match.date).toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}</span>}
+                    {isPreview && <span className="text-slate-500 hidden sm:inline">- {new Date(match.date).toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}</span>}
                  </div>
                  {isPreview && (
-                   <span className="bg-yellow-200 text-yellow-800 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                     <Clock size={10}/> PROGRAMMATA
+                   <span className="bg-lime-500/10 text-lime-400 border border-lime-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-[0_0_10px_rgba(132,204,22,0.2)]">
+                     <Clock size={10}/> <span className="hidden sm:inline">PREVIEW</span>
                    </span>
                  )}
               </div>
               
-              <div className="flex justify-between items-center">
-                <div className="flex-1">
-                  <div className="font-bold text-gray-800 text-lg leading-tight">
-                    {getTeamNames(match.match_stats, 'A') || 'Squadra A'}
+              <div className="flex justify-between items-center relative z-10">
+                <div className="flex-1 min-w-0">
+                  <div className="flex overflow-hidden p-1 pl-1">
+                    {teamAPlayers.map(player => (
+                      <PlayerAvatar 
+                        key={player.id} 
+                        player={player} 
+                        team="A"
+                        isMvp={player.is_mvp} 
+                        overlapClass="-ml-1.5 sm:-ml-3 md:-ml-5 first:ml-0"
+                        allTeamPlayers={teamAPlayers}
+                      />
+                    ))}
                   </div>
                 </div>
 
-                <div className={`mx-4 px-4 py-2 rounded-lg font-mono font-bold text-xl whitespace-nowrap border min-w-[100px] text-center ${isPreview ? 'bg-yellow-100 border-yellow-200' : 'bg-gray-100 border-gray-200'}`}>
+                <div className={`mx-1 sm:mx-4 px-0 font-oswald font-black text-3xl sm:text-6xl whitespace-nowrap text-center ${isPreview ? 'text-lime-400 tracking-tight' : 'text-white'}`}>
                   {isPreview ? (
                     <MatchCountdown targetDate={match.date} />
                   ) : (
-                    `${match.team_a_score} - ${match.team_b_score}`
+                    <span className="drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
+                      {match.team_a_score}
+                      <span className="text-slate-700/80 text-xl sm:text-4xl align-middle mx-1 sm:mx-3 font-light">-</span>
+                      {match.team_b_score}
+                    </span>
                   )}
                 </div>
 
-                <div className="flex-1 text-right">
-                  <div className="font-bold text-gray-800 text-lg leading-tight">
-                    {getTeamNames(match.match_stats, 'B') || 'Squadra B'}
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-row-reverse overflow-hidden p-1 pr-1">
+                    {teamBPlayers.map(player => (
+                      <PlayerAvatar 
+                        key={player.id} 
+                        player={player} 
+                        team="B"
+                        isMvp={player.is_mvp} 
+                        overlapClass="-mr-1.5 sm:-mr-3 md:-mr-5 first:mr-0"
+                        allTeamPlayers={teamBPlayers}
+                      />
+                    ))}
                   </div>
                 </div>
               </div>
 
-              <div className="text-center text-xs text-green-600 mt-3 font-semibold">
+              <div className="text-center text-[8px] sm:text-[10px] uppercase tracking-widest text-slate-500 mt-4 sm:mt-6 font-bold group-hover:text-white transition-colors">
                 Tocca per i dettagli
               </div>
             </div>
@@ -169,61 +268,74 @@ export default function HomePage() {
         })}
       </div>
 
-      {/* --- MODALE VISIBILE (Per l'utente) --- */}
+      {/* --- MODALE VISIBILE --- */}
       {selectedMatch && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSelectedMatch(null)}>
-          <div className="bg-white w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-slate-950/80 z-[60] flex items-center justify-center p-4 backdrop-blur-md" onClick={() => setSelectedMatch(null)}>
+          <div className="bg-slate-900 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl flex flex-col border border-slate-700" onClick={e => e.stopPropagation()}>
             
-            <div className="sticky top-0 bg-gray-100 p-4 flex justify-between items-center border-b z-10">
-              <h2 className="font-bold text-lg">
-                {selectedMatch.status === 'scheduled' ? 'Anteprima' : 'Risultato'}
-              </h2>
+            <div className="sticky top-0 bg-slate-900/95 p-4 flex justify-between items-center border-b border-slate-800 z-10 backdrop-blur">
+              <h2 className="font-bold text-lg font-oswald tracking-wide text-white">MATCH REPORT</h2>
               <div className="flex gap-2">
-                <button onClick={handleShare} className="p-2 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition">
+                <button onClick={handleShare} className="p-2 bg-slate-800 text-cyan-400 rounded-full hover:bg-slate-700 transition active:scale-90">
                   <Share2 size={20} />
                 </button>
-                <button onClick={() => setSelectedMatch(null)} className="p-2 bg-gray-200 rounded-full hover:bg-gray-300">
+                <button onClick={() => setSelectedMatch(null)} className="p-2 bg-slate-800 text-slate-400 rounded-full hover:bg-slate-700 transition active:scale-90">
                   <X size={20} />
                 </button>
               </div>
             </div>
 
-            <div className="p-6 bg-white">
-              <div className="text-center text-4xl font-bold mb-6 text-gray-800">
-                {selectedMatch.status === 'scheduled' 
-                  ? <span className="text-yellow-600 text-2xl"><MatchCountdown targetDate={selectedMatch.date} /></span> 
-                  : `${selectedMatch.team_a_score} - ${selectedMatch.team_b_score}`
-                }
+            <div className="p-6">
+              <div className="text-center mb-8">
+                 <div className="text-5xl sm:text-6xl font-bold text-white font-oswald drop-shadow-xl">
+                    {selectedMatch.status === 'scheduled' 
+                    ? <span className="text-lime-400 text-2xl sm:text-3xl tracking-tight"><MatchCountdown targetDate={selectedMatch.date} /></span> 
+                    : <>
+                        {selectedMatch.team_a_score} 
+                        <span className="text-slate-700/80 text-4xl sm:text-5xl align-middle font-light mx-3 sm:mx-4">-</span> 
+                        {selectedMatch.team_b_score}
+                      </>
+                    }
+                 </div>
               </div>
 
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-gray-500 text-xs border-b">
-                    <th className="text-left py-2">Formazioni</th>
+                  <tr className="text-slate-500 text-xs uppercase border-b border-slate-800 font-oswald tracking-wider">
+                    <th className="text-left py-3 pl-2">Giocatori</th>
                     {selectedMatch.status !== 'scheduled' && (
                       <>
-                        <th className="text-center py-2">⚽</th>
-                        <th className="text-center py-2">👟</th>
-                        <th className="text-center py-2">🧤</th>
-                        <th className="text-center py-2">🥅</th>
+                        <th className="text-center py-3 text-lg" title="Gol">⚽</th>
+                        <th className="text-center py-3 text-lg" title="Assist">👟</th>
+                        <th className="text-center py-3 text-lg" title="Porta">🧤</th>
+                        <th className="text-center py-3 text-lg" title="Subiti">🥅</th>
                       </>
                     )}
                   </tr>
                 </thead>
-                <tbody className="divide-y">
+                <tbody className="divide-y divide-slate-800">
                   {selectedMatch.match_stats.map(stat => (
-                    <tr key={stat.id} className={stat.team === 'A' ? 'bg-blue-50/50' : 'bg-red-50/50'}>
-                      <td className="py-3 font-medium flex items-center gap-1">
-                        <span className={`w-1 h-4 rounded mr-2 ${stat.team === 'A' ? 'bg-blue-500' : 'bg-red-500'}`}></span>
-                        {stat.players?.name}
-                        {stat.is_mvp && <Star size={14} className="text-yellow-500 fill-yellow-500 ml-1" />}
+                    // AGGIUNTO onClick e cursor-pointer alla riga
+                    <tr 
+                        key={stat.id} 
+                        onClick={() => goToPlayer(stat.player_id)} 
+                        className="group hover:bg-slate-800/50 transition cursor-pointer"
+                    >
+                      <td className="py-3 pl-2 font-medium flex items-center gap-2">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 ${stat.team === 'A' ? 'bg-cyan-500' : 'bg-fuchsia-600'}`}>
+                           {stat.players?.name?.charAt(0)}
+                        </div>
+                        <span className="text-slate-200 text-base truncate max-w-[120px] underline decoration-transparent group-hover:decoration-slate-500 underline-offset-2 transition-all">
+                            {stat.players?.name}
+                        </span>
+                        {stat.is_mvp && <Star size={14} className="text-yellow-400 fill-yellow-400 animate-pulse shrink-0" />}
                       </td>
                       {selectedMatch.status !== 'scheduled' && (
                         <>
-                          <td className="text-center font-bold">{stat.goals > 0 ? stat.goals : '-'}</td>
-                          <td className="text-center text-gray-500">{stat.assists > 0 ? stat.assists : '-'}</td>
-                          <td className="text-center text-gray-500">{stat.gk_turns > 0 ? stat.gk_turns : '-'}</td>
-                          <td className="text-center font-bold text-red-400">{stat.gk_turns > 0 ? stat.gk_conceded : '-'}</td>
+                          <td className="text-center font-bold text-lg text-white font-oswald">{stat.goals > 0 ? stat.goals : <span className="text-slate-700 font-sans text-sm">-</span>}</td>
+                          <td className="text-center text-slate-400">{stat.assists > 0 ? stat.assists : '-'}</td>
+                          <td className="text-center text-slate-400">{stat.gk_turns > 0 ? stat.gk_turns : '-'}</td>
+                          <td className="text-center font-bold text-fuchsia-400">{stat.gk_turns > 0 ? stat.gk_conceded : '-'}</td>
                         </>
                       )}
                     </tr>
@@ -231,114 +343,41 @@ export default function HomePage() {
                 </tbody>
               </table>
               
-              {/* LEGENDA VISIBILE */}
-              <div className="mt-8 pt-4 border-t text-[10px] text-gray-400 text-center flex flex-wrap justify-center items-center gap-4 uppercase tracking-wider font-medium">
+              <div className="mt-8 pt-4 border-t border-slate-800 text-[10px] text-slate-500 text-center flex flex-wrap justify-center items-center gap-3 uppercase tracking-widest font-bold">
                  <span>Legenda:</span>
-                 <span>⚽ Gol</span> 
-                 <span>👟 Assist</span> 
-                 <span>🧤 Turni Porta</span> 
-                 <span>🥅 Gol Subiti</span>
-                 <span className="flex items-center gap-1">
-                   <Star size={12} className="fill-yellow-500 text-yellow-500"/> MVP
-                 </span>
+                 <span>⚽ Gol</span> | 
+                 <span>👟 Assist</span> | 
+                 <span>🧤 Turni Porta</span> | 
+                 <span>🥅 Gol Subiti</span> |
+                 <span className="flex items-center gap-0.5 text-yellow-500"><Star size={10} className="fill-yellow-500"/> MVP</span>
               </div>
 
               {selectedMatch.status === 'scheduled' && (
-                <p className="text-center text-sm text-gray-500 mt-4 italic">Statistiche non disponibili.</p>
+                <p className="text-center text-sm text-slate-500 mt-4 italic">Statistiche non ancora disponibili.</p>
               )}
             </div>
           </div>
         </div>
       )}
 
-      {/* --- HIDDEN EXPORT LAYOUT (PER LA FOTO) --- */}
-      {/* Stile ottimizzato per l'esportazione immagine */}
+      {/* --- EXPORT HIDDEN --- */}
       {selectedMatch && (
         <div ref={exportRef} style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '650px',
-            zIndex: -50, // SOTTO AL SITO
-            backgroundColor: 'white',
-            padding: '40px',
-            boxSizing: 'border-box',
-            pointerEvents: 'none', 
+            position: 'fixed', top: 0, left: 0, width: '650px', zIndex: -50, backgroundColor: '#0f172a', padding: '40px', boxSizing: 'border-box', pointerEvents: 'none', fontFamily: 'Roboto, sans-serif'
         }}>
-           <div className="text-center text-gray-400 text-sm uppercase font-bold mb-2 tracking-widest">
+           <div className="text-center text-cyan-400 text-sm uppercase font-bold mb-2 tracking-[0.3em] font-oswald">
               {new Date(selectedMatch.date).toLocaleDateString('it-IT', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
            </div>
-
-           <div className="text-center text-6xl font-black mb-10 text-gray-800 tracking-tighter">
-             {selectedMatch.status === 'scheduled' 
-               ? <span className="text-yellow-600">VS</span> 
-               : `${selectedMatch.team_a_score} - ${selectedMatch.team_b_score}`
-             }
+           <div className="text-center mb-10">
+             <div className="text-8xl font-black text-white font-oswald drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]">
+               {selectedMatch.status === 'scheduled' ? <span className="text-lime-400">VS</span> : <>{selectedMatch.team_a_score} <span className="text-slate-700/80 text-6xl align-middle font-light mx-6">-</span> {selectedMatch.team_b_score}</>}
+             </div>
            </div>
-
-           <table className="w-full text-base border-collapse">
-             <thead>
-               <tr className="text-gray-500 text-xs uppercase border-b-2 border-gray-200">
-                 <th className="text-left py-4 font-bold pl-2 w-[40%]">Giocatori</th>
-                 {selectedMatch.status !== 'scheduled' && (
-                   <>
-                     {/* HO RIMESSO LE EMOJI ANCHE QUI, CON TESTO PIÙ GRANDE PER LA FOTO */}
-                     <th className="text-center py-4 w-[15%] text-2xl" title="Gol Fatti">⚽</th>
-                     <th className="text-center py-4 w-[15%] text-2xl" title="Assist">👟</th>
-                     <th className="text-center py-4 w-[15%] text-2xl" title="Turni in Porta">🧤</th>
-                     <th className="text-center py-4 w-[15%] text-2xl" title="Gol Subiti">🥅</th>
-                   </>
-                 )}
-               </tr>
-             </thead>
-             <tbody className="divide-y divide-gray-100">
-               {selectedMatch.match_stats.map(stat => (
-                 <tr key={stat.id} className={`h-16 ${stat.team === 'A' ? 'bg-blue-50' : 'bg-red-50'}`}>
-                   
-                   <td className="pl-4 align-middle">
-                     <div className="flex items-center gap-3">
-                       <span className={`w-2 h-8 rounded-full ${stat.team === 'A' ? 'bg-blue-600' : 'bg-red-600'}`}></span>
-                       <span className="font-bold text-gray-800 text-lg">{stat.players?.name}</span>
-                       {stat.is_mvp && <Star size={20} className="text-yellow-500 fill-yellow-500" />}
-                     </div>
-                   </td>
-
-                   {selectedMatch.status !== 'scheduled' && (
-                     <>
-                       <td className="text-center align-middle">
-                         <span className={`font-bold text-xl ${stat.goals > 0 ? 'text-gray-900' : 'text-gray-300'}`}>
-                           {stat.goals > 0 ? stat.goals : '-'}
-                         </span>
-                       </td>
-                       <td className="text-center align-middle">
-                          <span className={`font-medium text-lg ${stat.assists > 0 ? 'text-gray-600' : 'text-gray-300'}`}>
-                            {stat.assists > 0 ? stat.assists : '-'}
-                          </span>
-                       </td>
-                       <td className="text-center align-middle">
-                          <span className={`font-medium text-lg ${stat.gk_turns > 0 ? 'text-gray-600' : 'text-gray-300'}`}>
-                            {stat.gk_turns > 0 ? stat.gk_turns : '-'}
-                          </span>
-                       </td>
-                       <td className="text-center align-middle">
-                          <span className={`font-bold text-xl ${stat.gk_turns > 0 ? 'text-red-500' : 'text-gray-300'}`}>
-                            {stat.gk_turns > 0 ? stat.gk_conceded : '-'}
-                          </span>
-                       </td>
-                     </>
-                   )}
-                 </tr>
-               ))}
-             </tbody>
-           </table>
-
-           <div className="mt-10 pt-6 border-t-2 border-gray-100 flex justify-center gap-8 text-xs font-bold text-gray-400 uppercase tracking-widest">
-              <div className="flex items-center gap-2"><span className="text-lg">⚽</span> GOAL</div>
-              <div className="flex items-center gap-2"><span className="text-lg">👟</span> ASSIST</div>
-              <div className="flex items-center gap-2"><span className="text-lg">🧤</span> TURNI PORTA</div>
-              <div className="flex items-center gap-2"><span className="text-lg">🥅</span> SUBITI</div>
-              <div className="flex items-center gap-1 text-yellow-500"><Star size={16} className="fill-yellow-500"/> MVP</div>
+           <div className="border-t-2 border-slate-700">
+             <div className="flex items-center py-4 border-b border-slate-800"><div className="flex-grow font-bold text-slate-500 text-xs uppercase pl-4 tracking-widest font-oswald">Player</div>{selectedMatch.status !== 'scheduled' && (<><div className="w-16 text-center text-2xl">⚽</div><div className="w-16 text-center text-2xl">👟</div><div className="w-16 text-center text-2xl">🧤</div><div className="w-16 text-center text-2xl">🥅</div></>)}</div>
+             <div className="flex flex-col">{selectedMatch.match_stats.map(stat => (<div key={stat.id} className="flex items-center h-16 border-b border-slate-800/50"><div className="flex-grow pl-4 flex items-center h-full"><div className={`w-1.5 h-8 mr-4 rounded-full ${stat.team === 'A' ? 'bg-cyan-500' : 'bg-fuchsia-600'}`}></div><span className="font-bold text-slate-100 text-xl mr-3 leading-none">{stat.players?.name}</span>{stat.is_mvp && <Star size={22} className="text-yellow-400 fill-yellow-400" />}</div>{selectedMatch.status !== 'scheduled' && (<><div className="w-16 flex items-center justify-center h-full"><span className={`font-bold text-2xl font-oswald ${stat.goals > 0 ? 'text-white' : 'text-slate-700'}`}>{stat.goals > 0 ? stat.goals : '-'}</span></div><div className="w-16 flex items-center justify-center h-full"><span className={`font-medium text-xl font-oswald ${stat.assists > 0 ? 'text-slate-300' : 'text-slate-700'}`}>{stat.assists > 0 ? stat.assists : '-'}</span></div><div className="w-16 flex items-center justify-center h-full"><span className={`font-medium text-xl font-oswald ${stat.gk_turns > 0 ? 'text-slate-300' : 'text-slate-700'}`}>{stat.gk_turns > 0 ? stat.gk_turns : '-'}</span></div><div className="w-16 flex items-center justify-center h-full"><span className={`font-bold text-2xl font-oswald ${stat.gk_turns > 0 ? 'text-fuchsia-500' : 'text-slate-700'}`}>{stat.gk_turns > 0 ? stat.gk_conceded : '-'}</span></div></>)}</div>))}</div>
            </div>
+           <div className="mt-10 flex justify-center gap-6 text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] font-oswald"><span>⚽ Gol</span> <span>👟 Assist</span> <span>🧤 Turni Porta</span> <span>🥅 Subiti</span> <span className="text-yellow-500">★ MVP</span></div>
         </div>
       )}
     </div>
