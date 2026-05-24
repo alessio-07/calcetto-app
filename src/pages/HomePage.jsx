@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabase';
 import { X, Star, Clock, Share2, Medal } from 'lucide-react';
 import { toPng } from 'html-to-image';
-import Header from '../components/Header';
 import { useNavigate } from 'react-router-dom';
 
 const getUniquePrefix = (targetName, allNames) => {
@@ -72,7 +71,6 @@ export default function HomePage({ session }) {
     if (!exportRef.current) return;
     try { 
         await new Promise(resolve => setTimeout(resolve, 500)); 
-        // FIX: Rimosso width fisso e pixelRatio per lasciare che l'HTML definisca la dimensione
         const dataUrl = await toPng(exportRef.current, { cacheBust: true, backgroundColor: '#0f172a' }); 
         const blob = await (await fetch(dataUrl)).blob(); 
         const file = new File([blob], 'risultato-partita.png', { type: 'image/png' }); 
@@ -85,7 +83,6 @@ export default function HomePage({ session }) {
 
   return (
     <div className="w-full min-h-screen bg-slate-900 text-slate-100 p-4 pb-24">
-      <Header title="Partite" session={session} />
       {matches.length === 0 ? <p className="text-slate-500">Nessuna partita trovata.</p> : null}
       <div className="space-y-6">
         {matches.map(match => {
@@ -139,10 +136,10 @@ export default function HomePage({ session }) {
                 </tbody>
               </table>
               <div className="mt-8 pt-4 border-t border-slate-800 text-[10px] text-slate-500 text-center flex flex-wrap justify-center items-center gap-3 uppercase tracking-widest font-bold">
-                  <span>Legenda:</span>
-                  <span>⚽ Gol</span> | <span>👟 Assist</span> | <span>🧤 Turni Porta</span> | <span>🥅 Gol Subiti</span> |
-                  <span className="flex items-center gap-0.5 text-yellow-500"><Star size={10} className="fill-yellow-500"/> MVP</span> |
-                  <span className="flex items-center gap-0.5 text-cyan-400"><Medal size={10} className=""/> Candidature</span>
+                 <span>Legenda:</span>
+                 <span>⚽ Gol</span> | <span>👟 Assist</span> | <span>🧤 Turni Porta</span> | <span>🥅 Gol Subiti</span> |
+                 <span className="flex items-center gap-0.5 text-yellow-500"><Star size={10} className="fill-yellow-500"/> MVP</span> |
+                 <span className="flex items-center gap-0.5 text-cyan-400"><Medal size={10} className=""/> Candidature</span>
               </div>
               {selectedMatch.status === 'scheduled' && (<p className="text-center text-sm text-slate-500 mt-4 italic">Statistiche non ancora disponibili.</p>)}
             </div>
@@ -150,15 +147,15 @@ export default function HomePage({ session }) {
         </div>
       )}
 
-      {/* EXPORT HIDDEN (Corretto per evitare tagli) */}
+      {/* EXPORT HIDDEN */}
       {selectedMatch && (
         <div ref={exportRef} style={{ 
             position: 'fixed', 
             top: 0, 
             left: 0, 
-            width: '650px', // Larghezza fissa per l'export
-            height: 'auto', // Altezza automatica in base al contenuto
-            minHeight: '100%', // Assicura che non sia zero
+            width: '650px',
+            height: 'auto',
+            minHeight: '100%',
             zIndex: -50, 
             backgroundColor: '#0f172a', 
             padding: '40px', 
@@ -175,7 +172,6 @@ export default function HomePage({ session }) {
                     <div className="flex-grow pl-4 flex items-center h-full">
                         <div className={`w-1.5 h-8 mr-4 rounded-full ${stat.team === 'A' ? 'bg-cyan-500' : 'bg-fuchsia-600'}`}></div>
                         <span className="font-bold text-slate-100 text-xl mr-3 leading-none">{stat.players?.name}</span>
-                        {/* MEDAGLIE ANCHE NELL'EXPORT */}
                         {stat.is_mvp ? <Star size={22} className="text-yellow-400 fill-yellow-400" /> : stat.is_candidate ? <Medal size={22} className="text-cyan-400" /> : null}
                     </div>
                     {selectedMatch.status !== 'scheduled' && (<><div className="w-16 flex items-center justify-center h-full"><span className={`font-bold text-2xl font-oswald ${stat.goals > 0 ? 'text-white' : 'text-slate-700'}`}>{stat.goals > 0 ? stat.goals : '-'}</span></div><div className="w-16 flex items-center justify-center h-full"><span className={`font-medium text-xl font-oswald ${stat.assists > 0 ? 'text-slate-300' : 'text-slate-700'}`}>{stat.assists > 0 ? stat.assists : '-'}</span></div><div className="w-16 flex items-center justify-center h-full"><span className={`font-medium text-xl font-oswald ${stat.gk_turns > 0 ? 'text-slate-300' : 'text-slate-700'}`}>{stat.gk_turns > 0 ? stat.gk_turns : '-'}</span></div><div className="w-16 flex items-center justify-center h-full"><span className={`font-bold text-2xl font-oswald ${stat.gk_turns > 0 ? 'text-fuchsia-500' : 'text-slate-700'}`}>{stat.gk_turns > 0 ? stat.gk_conceded : '-'}</span></div></>)}

@@ -1,14 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabase';
-import Header from '../components/Header';
 import { ChevronDown, ChevronUp, Star, HelpCircle, Share2, X, Medal } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { useLocation } from 'react-router-dom';
-
-// ... (Helper Components FormBadge, HighlightCard, MiniStatBox, PlayerCard rimangono uguali a prima)
-// Per brevità non li riscrivo tutti, sono identici alla versione precedente funzionante.
-// IMPORTANTE: Assicurati di copiare i componenti Helper dalla versione precedente se non li hai salvati.
-// Qui metto solo il componente principale PlayersPage che contiene le modifiche all'export.
 
 const FormBadge = ({ type }) => {
   const base = "w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-[10px] sm:text-xs border border-slate-700 shadow-md shrink-0";
@@ -158,7 +152,6 @@ export default function PlayersPage({ session }) {
 
   return (
     <div className="w-full min-h-screen bg-slate-900 text-slate-100 p-4 pb-24">
-      <Header title="Giocatori" session={session} />
       {loading ? <div className="text-center text-slate-500 mt-10 animate-pulse">Scouting giocatori...</div> : (<div className="space-y-4">{playersData.map(player => (<PlayerCard key={player.id} player={player} isExpanded={expandedIds.has(player.id)} onToggle={() => toggleExpand(player.id)} onHighlightClick={setSelectedMatch} />))}</div>)}
       {selectedMatch && (
         <div className="fixed inset-0 bg-slate-950/80 z-[70] flex items-center justify-center p-4 backdrop-blur-md" onClick={() => setSelectedMatch(null)}>

@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { supabase } from '../supabase';
-import Header from '../components/Header';
-import { Save, Star, Shield, Goal, Footprints, ChevronUp, ChevronDown, Medal, X } from 'lucide-react'; // Aggiunta X
+import { Save, Star, Shield, Goal, Footprints, ChevronUp, ChevronDown, Medal, X } from 'lucide-react'; 
 import { useNavigate, useParams } from 'react-router-dom';
 
 // --- COMPONENTE INPUT PERSONALIZZATO (StatInput) ---
@@ -222,9 +221,11 @@ export default function MatchCreator({ session }) {
 
   return (
     <div className="w-full min-h-screen bg-slate-900 text-slate-100 p-4 pb-32">
-      <div className="relative">
-        <Header title={id ? "Modifica" : "Nuova Partita"} session={session} />
-        {/* TASTO INDIETRO (X) POSIZIONATO SOPRA L'HEADER/TITOLO */}
+      <div className="relative mb-6">
+        <h2 className="text-2xl font-bold font-oswald uppercase tracking-wider text-white">
+          {id ? "Modifica Partita" : "Nuova Partita"}
+        </h2>
+        {/* TASTO INDIETRO (X) */}
         <button 
             onClick={() => navigate('/admin')}
             className="absolute top-0 right-0 p-2 bg-slate-800 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white transition shadow-lg border border-slate-700"

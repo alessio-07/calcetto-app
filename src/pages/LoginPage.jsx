@@ -1,17 +1,25 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
-import { useNavigate, Link } from 'react-router-dom';
-import { Lock, Mail, ChevronLeft } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { LogIn } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // RECUPERA LA MEMORIA DELLA PAGINA PRECEDENTE
+  // Se arrivi premendo il tasto da "/stats", from sarà "/stats". Se arrivi direttamente, sarà "/" (Home).
+  const from = location.state?.from || '/';
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     
     const { error } = await supabase.auth.signInWithPassword({
       email,
@@ -19,54 +27,65 @@ export default function LoginPage() {
     });
 
     if (error) {
-      alert('Errore: ' + error.message);
+      setError("Email o password errati");
+      setLoading(false);
     } else {
-      navigate('/admin'); 
+      // REINDIRIZZAMENTO INTELLIGENTE!
+      // Invece di mandarti forzatamente su /admin, ti rimanda da dove venivi.
+      navigate(from, { replace: true });
     }
-    setLoading(false);
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 relative">
-      
-      {/* TASTO INDIETRO */}
-      <Link to="/" className="absolute top-6 left-6 text-slate-400 hover:text-white transition p-2 bg-slate-800 rounded-full">
-        <ChevronLeft size={24} />
-      </Link>
+    <div className="min-h-[80vh] flex items-center justify-center p-4">
+      <div className="bg-slate-800 p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-700">
+        
+        <div className="flex justify-center mb-6">
+          <div className="bg-cyan-500/20 p-4 rounded-full">
+            <LogIn size={40} className="text-cyan-400" />
+          </div>
+        </div>
+        
+        {/* TITOLO AGGIORNATO (Senza "Admin") */}
+        <h2 className="text-2xl font-black font-oswald tracking-widest text-white text-center mb-6 uppercase">
+          Login
+        </h2>
 
-      <div className="bg-slate-800 p-8 rounded-3xl shadow-2xl border border-slate-700 w-full max-w-sm mt-10">
-        <h1 className="text-3xl font-oswald font-bold text-center text-white mb-8 tracking-wide">
-          LOGIN <span className="text-fuchsia-500">ADMIN</span>
-        </h1>
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/50 text-red-400 p-3 rounded-lg mb-6 text-sm text-center font-bold">
+            {error}
+          </div>
+        )}
 
-        <form onSubmit={handleLogin} className="space-y-6">
-          <div className="relative">
-            <Mail className="absolute left-3 top-3 text-slate-500" size={20} />
-            <input 
-              type="email" 
-              placeholder="Email" 
+        <form onSubmit={handleLogin} className="space-y-5">
+          <div>
+            <label className="block text-slate-400 text-sm font-bold mb-2 uppercase tracking-wider">Email</label>
+            <input
+              type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-600 text-white pl-10 p-3 rounded-xl focus:outline-none focus:border-cyan-400 transition"
+              className="w-full bg-slate-900 border border-slate-700 text-white p-3 rounded-lg focus:outline-none focus:border-cyan-400 transition"
+              placeholder="La tua email..."
+              required
             />
           </div>
-
-          <div className="relative">
-            <Lock className="absolute left-3 top-3 text-slate-500" size={20} />
-            <input 
-              type="password" 
-              placeholder="Password" 
+          <div>
+            <label className="block text-slate-400 text-sm font-bold mb-2 uppercase tracking-wider">Password</label>
+            <input
+              type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-600 text-white pl-10 p-3 rounded-xl focus:outline-none focus:border-cyan-400 transition"
+              className="w-full bg-slate-900 border border-slate-700 text-white p-3 rounded-lg focus:outline-none focus:border-cyan-400 transition"
+              placeholder="La tua password..."
+              required
             />
           </div>
-
-          <button 
+          <button
+            type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold py-3 rounded-xl font-oswald tracking-widest hover:from-cyan-500 hover:to-blue-500 transition active:scale-95 shadow-lg"
+            className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 px-4 rounded-lg transition-colors mt-2 uppercase font-oswald tracking-wider"
           >
-            {loading ? 'ACCESSO...' : 'ENTRA'}
+            {loading ? 'Accesso in corso...' : 'Entra'}
           </button>
         </form>
       </div>
